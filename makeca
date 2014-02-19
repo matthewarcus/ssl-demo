@@ -1,0 +1,11 @@
+#!/bin/sh
+mkdir $1
+mkdir $1/private
+mkdir $1/newcerts
+touch $1/index.txt
+cp ca.config $1
+cp root.pem $1
+cp rootkey.pem $1/private
+echo 01 > $1/serial
+# check it works
+(cd $1; openssl ca -config ./ca.config -in ../careq.pem)

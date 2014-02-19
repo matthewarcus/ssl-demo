@@ -1,0 +1,23 @@
+# set up an openssl ca:
+
+$ ./makeca testca
+
+$ cd testca
+
+# run an OCSP server:
+
+$ openssl ocsp -index index.txt -rsigner root.pem -rkey private/rootkey.pem -CA root.pem -port 8888
+
+# verification:
+$ openssl ocsp -CAfile root.pem -issuer root.pem -cert newcerts/01.pem -url http://localhost:8888/
+
+# run an openssl server:
+
+$ openssl s_server -tls1 -tlsextdebug -status_verbose -status -status_url http://localhost:8888/ -CAfile root.pem -key private/root.pem -cert newcerts/01.pem -accept 5999
+
+# Minimum working line:
+$ openssl s_server -status -status_url http://localhost:8888/ -CAfile root.pem -key ../cakey.pem -cert newcerts/01.pem -accept 5999
+
+# make client request:
+
+$ openssl s_client -connect localhost:5999 -tls1 -CAfile root.pem -status # -tlsextdebug
