@@ -13,10 +13,10 @@ $ openssl ocsp -CAfile root.pem -issuer root.pem -cert newcerts/01.pem -url http
 
 # run an openssl server:
 
-$ openssl s_server -tls1 -tlsextdebug -status_verbose -status -status_url http://localhost:8888/ -CAfile root.pem -key private/root.pem -cert newcerts/01.pem -accept 5999
+$ openssl s_server -tls1 -tlsextdebug -status_verbose -status -status_url http://localhost:8888/ -CAfile root.pem -key private/root.pem -cert cert.pem -accept 5999
 
 # Minimum working line:
-$ openssl s_server -status -status_url http://localhost:8888/ -CAfile root.pem -key ../cakey.pem -cert newcerts/01.pem -accept 5999
+$ openssl s_server -status -status_url http://localhost:8888/ -CAfile root.pem -key certkey.pem -cert cert.pem -accept 5999
 
 # make client request:
 
