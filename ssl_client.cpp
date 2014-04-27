@@ -99,16 +99,16 @@ int main(int argc, char *argv[])
       debuglevel = atoi(argv[1]);
       argc--; argv++;
     } else if (strcmp(argv[1],"--SSLv3") == 0) {
-      method = SSLv3_server_method();
+      method = SSLv3_client_method();
       argc--; argv++;
     } else if (strcmp(argv[1],"--TLSv1") == 0) {
-      method = TLSv1_server_method();
+      method = TLSv1_client_method();
       argc--; argv++;
     } else if (strcmp(argv[1],"--TLSv1.1") == 0) {
-      method = TLSv1_1_server_method();
+      method = TLSv1_1_client_method();
       argc--; argv++;
     } else if (strcmp(argv[1],"--TLSv1.2") == 0) {
-      method = TLSv1_2_server_method();
+      method = TLSv1_2_client_method();
       argc--; argv++;
     } else if (strcmp(argv[1],"--cipherlist") == 0) {
       argc--; argv++;
@@ -289,6 +289,8 @@ int main(int argc, char *argv[])
     describeSession(ssl);
   }
 #endif
+
+  //SSL_heartbeat(ssl); // !!
 
   bool loopok = sslLoop(ssl,fd);
 
