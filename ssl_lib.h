@@ -1,3 +1,10 @@
+// ----------------------------------------------------------------------------
+// "DO WHAT THOU WILT license" (Revision 666):
+// Copyright Matthew Arcus (c) 2014.
+// Please retain this notice.
+// You can do whatever you like with this code.
+// ----------------------------------------------------------------------------
+
 #if !defined SSL_LIB_H
 #define SSL_LIB_H
 // Many SSL functions return 1 on success, something else on failure.

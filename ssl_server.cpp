@@ -1,3 +1,10 @@
+// ----------------------------------------------------------------------------
+// "DO WHAT THOU WILT license" (Revision 666):
+// Copyright Matthew Arcus (c) 2014.
+// Please retain this notice.
+// You can do whatever you like with this code.
+// ----------------------------------------------------------------------------
+
 #include <stdio.h>
 #include <unistd.h>
 #include <assert.h>
@@ -102,19 +109,26 @@ char *bn2hex(const BIGNUM *bn, char *&tmp)
 static SRP_VBASE *srpData = NULL;
 static bool doSRPData = false;
 
+// What is ad here?
 int srpServerCallback(SSL *s, int *ad, void *arg)
 {
   (void)arg;
 
   // Simulate asynchronous loading of SRP data
+  // The first time this is called, we return -1 and get an WANT_X509_LOOKUP
+  // error in the handshake; we then set up the SRP user data externally and
+  // try again, this time it should succeed.
   if (srpData == NULL) {
     if (debuglevel > 0) fprintf(stderr,"Deferring SRP data\n");
     doSRPData = true;
     return -1; // Not ready yet
   }
 
+  // srpData has been initialized, so get username.
   char *srpusername = SSL_get_srp_username(s);
+  CHECK(srpusername != NULL);
   if (debuglevel > 0) fprintf(stderr, " username = %s\n", srpusername);
+  // Get data for user
   SRP_user_pwd *p = SRP_VBASE_get_by_user(srpData,srpusername);
   if (p == NULL) {
     fprintf(stderr, "User %s doesn't exist\n", srpusername);
@@ -129,32 +143,44 @@ int srpServerCallback(SSL *s, int *ad, void *arg)
     OPENSSL_free(tmp);
   }
 
-  // Get verifier data for user
-  CHECK(SSL_set_srp_server_param(s,p->N,p->g,p->s, p->v, NULL) == SSL_OK);
+  // Set verifier data
+  CHECK(SSL_set_srp_server_param(s, p->N, p->g, p->s, p->v, NULL) == SSL_OK);
   return SSL_ERROR_NONE;
 }
 
 
 void setupSRPData(SSL_CTX *ctx)
 {
+  assert(srpData == NULL);
   // For convenience, we will use the SRP_VBASE structure
+  // I'm not entirely sure what all the fields do, but
+  // we mainly want it for the stack of user data.
   srpData = SRP_VBASE_new(NULL);
   CHECK(srpData != NULL);
+  // Try reading in off disk.
   if (SRP_VBASE_init(srpData, (char *)srpvfile) != 0) {
     // No file to initialize from so make our own entry
+    // This would normally have already been done.
     SRP_user_pwd *p = (SRP_user_pwd *)OPENSSL_malloc(sizeof(SRP_user_pwd));
+
+    // Get prime and generator. These don't have to be secret, so use
+    // some predefined good values.
     SRP_gN *gN = SRP_get_default_gN(srpgroup);
     CHECK(gN != NULL);
+    // This check seems a bit pointless, but doesn't do harm.
     char *srpCheck = SRP_check_known_gN_param(gN->g, gN->N); 
     CHECK(srpCheck != NULL);
     if (debuglevel > 0) fprintf(stderr, "SRP check: %s\n", srpCheck);
-    BIGNUM *salt = NULL;
-    BIGNUM *verifier = NULL;
+
+    // Now create the verifier for the password.
+    // We could get the password from the user at this point.
+    BIGNUM *salt = NULL, *verifier = NULL;
     CHECK(SRP_create_verifier_BN(username, password, &salt, &verifier, gN->N, gN->g));
     p->id = OPENSSL_strdup(username);
     p->g = gN->g; p->N = gN->N;
     p->s = salt; p->v = verifier;
     p->info = NULL;
+    // Add in to VBASE stack of user data
     sk_SRP_user_pwd_push(srpData->users_pwd, p);
   }
 }
@@ -191,17 +217,23 @@ bool peerVerified(SSL *ssl)
 }
 
 //// Handle a single connection ////
-
 void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify)
 {
-  BIO_set_nbio(bio,1); // non-blocking
+  // This is a combination of synchronous and asynchronous I/O
+  // The sockets themselves are non-blocking but for handshakes
+  // & shutdown we wrap them in a select loop. Normal reading &
+  // writing is multiplexed with non-socket I/O.
+  // We could make everything properly event driven with a simple
+  // state machine, but I wanted to understand the basic event
+  // sequencing first.
+  // BIO_set_nbio(bio,1); // non-blocking - done with server socket now
   SSL *ssl = SSL_new(ctx);
   CHECK(ssl != NULL);
   SSL_set_bio(ssl,bio,bio);
   SSL_set_accept_state(ssl);
 
   while (true) {
-    int res = sslAccept(ssl);
+    int res = sslAccept(ssl); // Our 'synchronous' function
     if (res == SSL_OK) {
       break;
     } else if (SSL_get_error(ssl,res) == SSL_ERROR_WANT_X509_LOOKUP && doSRPData) {
@@ -223,7 +255,11 @@ void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify)
     describeCertificates(ssl,true);
   }
 
-  bool verify = doVerify && !peerVerified(ssl);
+  // Trying to verify the client when we are doing SRP isn't
+  // necessary and doesn't work.
+  bool isSRP = SSL_get_srp_username(ssl) != NULL;
+  bool verify = doVerify && !isSRP && !peerVerified(ssl);
+
   int fd = SSL_get_fd(ssl);
   if (sockbuff > 0) setsockbuff(fd,sockbuff);
 
@@ -325,6 +361,7 @@ int main(int argc, char *argv[])
     fprintf(stderr, "Usage: %s [-a] <portnum>\n", argv[0]);
     exit(0);
   }
+
   char *portnum = argv[1];
 
   SSL_library_init();
@@ -339,6 +376,10 @@ int main(int argc, char *argv[])
 
   //SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
   //SSL_CTX_set_mode(ctx, SSL_MODE_ENABLE_PARTIAL_WRITE);
+
+  //SSL_CTX_set_mode(ctx, SSL_MODE_RELEASE_BUFFERS);
+  // Disable caching of freed buffers
+  //ctx->freelist_max_len = 0;
 
   long options = 0;
   options |= SSL_OP_NO_SSLv2;
@@ -379,7 +420,8 @@ int main(int argc, char *argv[])
   BIO *server = BIO_new_accept(portnum);
   CHECK(server != NULL);
   CHECK(BIO_set_bind_mode(server, BIO_BIND_REUSEADDR) == SSL_OK);
-  BIO_set_nbio(server,1); // non-blocking
+  //BIO_set_nbio_accept(server,1); // non-blocking accepts
+  BIO_set_nbio(server,1); // non-blocking client sockets
 
   setsighandler(false); // Handle sigint
 

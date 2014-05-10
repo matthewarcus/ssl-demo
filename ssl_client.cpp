@@ -1,8 +1,9 @@
-////////////////////////////////////////////////////////////////////////////////
-// Copyright: Matthew Arcus, 2014
-// Placed in the public domain.
-// Please acknowledge original author.
-////////////////////////////////////////////////////////////////////////////////
+// ----------------------------------------------------------------------------
+// "DO WHAT THOU WILT license" (Revision 666):
+// Copyright Matthew Arcus (c) 2014.
+// Please retain this notice.
+// You can do whatever you like with this code.
+// ----------------------------------------------------------------------------
 
 #include <stdio.h>
 #include <unistd.h>
@@ -21,17 +22,26 @@ static const char *clientcasFile = "clientcas.pem";
 static const char *syscasdir = "/etc/ssl/certs";
 static const char *localcasdir = "clientcerts";
 
+
 static const char *username = "user";
-static const char *password = "password";
+static const char *password = NULL; //"password";
 
 // Return the SRP password
 char *srpCallback(SSL *ssl, void *arg)
 {
-  char *s = (char*)arg;
-  if (strcmp(s,username) == 0) {
+  char *user = (char*)arg;
+  if (password != NULL) {
     return OPENSSL_strdup(password);
   } else {
-    return NULL;
+    // getpass is 'obsolete' but does the job here
+    ssize_t promptsize = 256;
+    char prompt[promptsize];
+    CHECK(snprintf(prompt, promptsize, "Password for %s: ", user) < promptsize);
+    char *pass = getpass(prompt);
+    char *result = OPENSSL_strdup(pass);
+    // getpass uses a static buffer, so clear it out after use.
+    memset(pass,0,strlen(pass));
+    return result;
   }
 }
 
@@ -149,6 +159,14 @@ int main(int argc, char *argv[])
       argc--; argv++;
       writeSessionFile = argv[1];
       argc--; argv++;
+    } else if (strcmp(argv[1],"--user") == 0) {
+      argc--; argv++;
+      username = argv[1];
+      argc--; argv++;
+    } else if (strcmp(argv[1],"--password") == 0) {
+      argc--; argv++;
+      password = argv[1];
+      argc--; argv++;
     } else {
       break;
     }
@@ -180,6 +198,8 @@ int main(int argc, char *argv[])
   // Uncomment to not worry about renegotiation and WANT_XXX
   // Actually, it's more instructive not to do this...
   //SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
+  
+  //SSL_CTX_set_mode(ctx, SSL_MODE_RELEASE_BUFFERS);
 
   // And exclude SSLv2, even if a client uses it to start with
   long options = 0;
@@ -221,9 +241,9 @@ int main(int argc, char *argv[])
     } else if (doPSK) {
       cipherlist = "PSK";
     } else {
-      // Don't include SRP ciphers unless we are going to do SRP!
+      // Don't include SRP ciphers unless we are going to do SRP.
       // The server doesn't like it if the client includes SRP
-      // ciphers but no SRP username.
+      // ciphers but no SRP username (this is by design).
       cipherlist = "DEFAULT:!SRP";
     }
   }

@@ -1,3 +1,10 @@
+// ----------------------------------------------------------------------------
+// "DO WHAT THOU WILT license" (Revision 666):
+// Copyright Matthew Arcus (c) 2014.
+// Please retain this notice.
+// You can do whatever you like with this code.
+// ----------------------------------------------------------------------------
+
 #include <stdio.h>
 #include <assert.h>
 #include <unistd.h>
@@ -434,7 +441,9 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
 	closed = true;
 	// This implements the rule that we close the connection when
 	// the server stops reading input. Other strategies are possible.
-	if (isserver) return true;
+	//if (isserver) return true;
+	// And this implements closing when either end close
+	return true;
       } else {
 	inbuffer[ret] = 0;
 	if (strcmp(inbuffer, "r\n") == 0) {
@@ -445,10 +454,11 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
 	}
       }
     }
-    bool gotevent = FD_ISSET(fd, &rfds) || FD_ISSET(fd, &wfds);
-    // If we aren't waiting to complete a write.
-    // we must be waiting to read.
-    if (!write_pending && gotevent) {
+    bool gotsslevent = FD_ISSET(fd, &rfds) || FD_ISSET(fd, &wfds);
+    // If we aren't waiting to complete a write we must be waiting to read.
+    // If we are waiting to complete a write, we mustn't read as the
+    // OpenSSL state machine cannae take it.
+    if (!write_pending && gotsslevent) {
       while (true) {
 	int ret = SSL_read(ssl, netbuffer, NBYTES);
 	int err = SSL_get_error(ssl,ret);
@@ -461,7 +471,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
 	  nread += ret;
 	  if (!noecho) CHECK(write(1,netbuffer,ret) > 0);
 	  if (verify) {
-	    // On first read from client, do SRP/PSK verification
+	    // On first read from client, do client verification
 	    assert(isserver);
 	    verify = false;
 	    if (debuglevel > 0) fprintf(stderr,"Verifying client\n");
@@ -481,6 +491,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
 	    read_wantwrite_count++;
 	    read_wantwrite = true;
 	  } else {
+	    fprintf(stderr, "Error is %d\n", err);
 	    CHECK(0);
 	  }
 	  break; // On error return
@@ -495,9 +506,10 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
     // we did, then the state might have changed), and if we didn't get
     // signalled on the SSL fd at all, we must have got something in
     // from stdin.
-    // If write_pending is true, then we won't have tried to read &
-    // so it's only worth trying a write if we got an event.
-    if (insize > 0 && !(write_pending && !gotevent)) {
+    // However, if write_pending is true, then we won't have tried 
+    // to read & it's only worth trying a write if we really got an
+    // event on the SSL socket. I think.
+    if (insize > 0 && !(write_pending && !gotsslevent)) {
       int ret = SSL_write(ssl, inbuffer+instart, insize);
       if (ret == 0) {
 	return true;
