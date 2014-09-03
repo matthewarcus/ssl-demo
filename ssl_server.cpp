@@ -27,11 +27,13 @@ static const char *dhparamfile = "dhparam.pem";
 int eccurve = NID_secp256k1;
 //int eccurve = NID_X9_62_prime256v1;
 
+#if !defined NO_SRP
 static const char *username = "user";
 static const char *password = "password";
 
 static const char *srpgroup = "1536";
 static const char *srpvfile = "passwd.srpv";
+#endif
 
 static int sockbuff = 0;
 
@@ -104,7 +106,7 @@ char *bn2hex(const BIGNUM *bn, char *&tmp)
 }
 
 //// SRP ////
-
+#if !defined NO_SRP
 // Load SRP verifier data in here when needed
 static SRP_VBASE *srpData = NULL;
 static bool doSRPData = false;
@@ -190,7 +192,6 @@ void setupSRP(SSL_CTX *ctx)
   //CHECK(SSL_CTX_set_srp_cb_arg(ctx, srpData) == SSL_OK);
   CHECK(SSL_CTX_set_srp_username_callback(ctx, srpServerCallback) == SSL_OK);
 }
-
 //// PSK ////
 
 unsigned int pskServerCallback(SSL *ssl, const char *identity,
@@ -207,6 +208,7 @@ void setupPSK(SSL_CTX *ctx)
   CHECK(SSL_CTX_use_psk_identity_hint(ctx, "username") == SSL_OK);
   SSL_CTX_set_psk_server_callback(ctx, pskServerCallback);
 }
+#endif
 
 bool peerVerified(SSL *ssl)
 {
@@ -236,11 +238,13 @@ void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify)
     int res = sslAccept(ssl); // Our 'synchronous' function
     if (res == SSL_OK) {
       break;
+#if !defined NO_SRP
     } else if (SSL_get_error(ssl,res) == SSL_ERROR_WANT_X509_LOOKUP && doSRPData) {
       // Should use some sort of callback here.
       if (debuglevel > 0) fprintf(stderr, "Setting up SRP Data\n");
       setupSRPData(ctx);
       doSRPData = false;
+#endif
     } else {
       fprintf(stderr,"Server SSL_accept failed: %d\n", SSL_get_error(ssl,res));
       ERR_print_errors_fp(stderr);
@@ -255,10 +259,12 @@ void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify)
     describeCertificates(ssl,true);
   }
 
+  bool verify = doVerify && !peerVerified(ssl);
+#if !defined NO_SRP
   // Trying to verify the client when we are doing SRP isn't
   // necessary and doesn't work.
-  bool isSRP = SSL_get_srp_username(ssl) != NULL;
-  bool verify = doVerify && !isSRP && !peerVerified(ssl);
+  verify = verify && (SSL_get_srp_username(ssl) == NULL);
+#endif
 
   int fd = SSL_get_fd(ssl);
   if (sockbuff > 0) setsockbuff(fd,sockbuff);
@@ -267,13 +273,16 @@ void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify)
   // abruptly, in which case, don't try SSL_shutdown.
   bool loopok = sslLoop(ssl,fd,true,verify);
 
-  if (verify) {
-    if (debuglevel > 0) fprintf(stderr,"Server renegotiated for client verification:\n");
-    describeSession(ssl);
-    describeCertificates(ssl,true);
+  if (!loopok) {
+     fprintf(stderr, "Closing connection on error\n");
+  } else {     
+     if (verify) {
+        if (debuglevel > 0) fprintf(stderr,"Server renegotiated for client verification:\n");
+        describeSession(ssl);
+        describeCertificates(ssl,true);
+     }
+     LOGCHECK (doShutdown(ssl) == SSL_OK);
   }
-  if (debuglevel > 0) fprintf(stderr, "Closing connection\n");
-  if (loopok) LOGCHECK (doShutdown(ssl) == SSL_OK);
   if (debuglevel > 0) showcounts();
   SSL_free(ssl);
 }
@@ -285,8 +294,10 @@ int main(int argc, char *argv[])
   bool verify_client = false;
   bool doDH = false;    // Diffie-Helman key exchange
   bool doECDH = false;  // Elliptic curve Diffie-Helman
+#if !defined NO_SRP
   bool doPSK = false;   // Pre-shared key
   bool doSRP = false;   // Secure remote password
+#endif
   bool once = false;    // Serve just one connection, eg. for valgrind test
   // Allow ADH/AECDH/SRP as well as NULL for testing
   const char *cipherlist = "ALL:NULL";
@@ -344,12 +355,14 @@ int main(int argc, char *argv[])
     } else if (strcmp(argv[1],"--ecdh") == 0) {
       doECDH = true;
       argc--; argv++;
+#if !defined NO_SRP
     } else if (strcmp(argv[1],"--srp") == 0) {
       doSRP = true;
       argc--; argv++;
     } else if (strcmp(argv[1],"--psk") == 0) {
       doPSK = true;
       argc--; argv++;
+#endif
     } else if (strcmp(argv[1],"--once") == 0) {
       once = true;
       argc--; argv++;
@@ -398,8 +411,10 @@ int main(int argc, char *argv[])
 
   if (doDH) setupDH(ctx);
   if (doECDH) setupECDH(ctx);
+#if !defined NO_SRP
   if (doSRP) setupSRP(ctx);
   if (doPSK) setupPSK(ctx);
+#endif
   if (verify_client) setupClientVerification(ctx, servercasfile);
   
   CHECK(SSL_CTX_load_verify_locations(ctx, servercasfile, NULL) == SSL_OK);
@@ -440,7 +455,9 @@ int main(int argc, char *argv[])
   }
   BIO_free(server);
 
+#if !defined NO_SRP
   if (srpData != NULL) SRP_VBASE_free(srpData);
+#endif
   SSL_CTX_free(ctx);
   sslCleanup();
 }
