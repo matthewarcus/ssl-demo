@@ -30,7 +30,7 @@ openssl req -batch -subj '/C=GB/O=TEST CA/' -nodes -newkey $CRYPTO $DIGEST -keyo
 openssl x509 -req -CA root.pem -CAkey rootkey.pem -CAcreateserial $DIGEST -days $EXPIRY -in careq.pem -out ca.pem -extfile extfile.txt
 
 # Create a request for server certificate
-openssl req -batch -subj '/C=GB/O=TEST SERVER/CN=marcus-00' -nodes -newkey $CRYPTO $DIGEST -keyout serverkey.pem -out serverreq.pem
+openssl req -batch -subj '/C=GB/O=TEST SERVER/CN=testserver' -nodes -newkey $CRYPTO $DIGEST -keyout serverkey.pem -out serverreq.pem
 # and sign the request
 openssl x509 -req -CA ca.pem -CAkey cakey.pem -CAcreateserial $DIGEST -days $EXPIRY -in serverreq.pem -out servercert.pem -extfile ocsp.txt
 # include in server cert chain
