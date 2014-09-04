@@ -1,0 +1,1 @@
+authorityInfoAccess=OCSP;URI:http://localhost:8888/

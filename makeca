@@ -1,18 +1,24 @@
 #!/bin/sh
 # Construct a simple openssl CA directory structure
-# Needs: root.pem, rootkey.pem, ca.config
+if [ "$#" -ne 1 ] ; then
+  echo "Usage: $0 <cadir>" >&2
+  exit 1
+fi
+
+# Make the directory - fail if already existing
 mkdir $1
+# Copy config 
 cp ca.config $1
 cp ocsp.txt $1
+cp signer.txt $1
 cd $1
+# Set up
 mkdir private
 mkdir newcerts
 touch index.txt
-#cp ../root.pem $1
-#cp ../rootkey.pem private
+# Check it works!
 openssl req -x509 -batch -subj '/C=GB/O=TEST ROOT/' -nodes -days 1000 -newkey rsa:1024 -keyout private/rootkey.pem -out root.pem
 echo 01 > serial
-# check it works!
 # Make new private key and certificate request
 openssl req -batch -subj '/C=GB/O=TEST CERT/' -nodes -newkey rsa:1024 -keyout certkey.pem -out certreq.pem
 # And sign the certificate
