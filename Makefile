@@ -37,6 +37,8 @@ ssl_client ssl_server: ssl_lib.o
 ssl_client.o ssl_server.o ssl_lib.o: %.o: %.cpp ssl_lib.h
 	g++ -Wall -O2 -g $(INC) $(EXTRA) -c -Wshadow -o $@ $<
 
+test: ssl_server ssl_client test.sh
+	./test.sh
 
 clean:
 	rm -f $(EXES) *.o
@@ -44,3 +46,5 @@ clean:
 cleanall: clean
 	rm -rf clientcerts
 	rm -f *.pem */*.pem *.srl
+
+.PHONY: clean test all

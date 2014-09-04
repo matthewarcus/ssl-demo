@@ -1,17 +1,8 @@
 #!/bin/sh
 # Some tests for basic functionality.
-# This is horrible; should rewrite in Python.
 
-# How do we write testable software?
-# Need to control and monitor
-# Force events to happen (out of band preferably - hitting "r" to renegotiate isn't good)
-# Monitor the state of the application
-# Test points
-
-# Want to be able to check for unusual conditions on server (errors are normally confined to
-# a particular connection).
 TMPDIR=/tmp
-DATAFILE=./test_data.bin
+DATAFILE=./ssl_server
 INFILE=$TMPDIR/ssl_test_in
 OUTFILE=$TMPDIR/ssl_test_out
 RUNLOG=$TMPDIR/run.log
