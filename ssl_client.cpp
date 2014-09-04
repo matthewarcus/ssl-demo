@@ -23,9 +23,12 @@ static const char *syscasdir = "/etc/ssl/certs";
 static const char *localcasdir = "clientcerts";
 
 
-static const char *username = "user";
-static const char *password = NULL; //"password";
+//static const char *username = "user";
+//static const char *password = "password";
+static const char *username = NULL;
+static const char *password = NULL;
 
+#if !defined NO_SRP
 // Return the SRP password
 char *srpCallback(SSL *ssl, void *arg)
 {
@@ -56,6 +59,7 @@ unsigned int pskCallback(SSL *ssl, const char *hint,
   strcpy((char*)psk,password);
   return strlen(password);
 }
+#endif
 
 static int ocsp_resp_cb(SSL *s, void *arg)
 {
@@ -95,6 +99,8 @@ int main(int argc, char *argv[])
   const char *writeSessionFile = NULL;
   const char *cipherlist = NULL;
   const SSL_METHOD *method = SSLv23_client_method();
+  const char *servername = NULL;
+  const char *progname = argv[0];
 
   while (argc > 1) {
     // Options shared with server
@@ -167,12 +173,16 @@ int main(int argc, char *argv[])
       argc--; argv++;
       password = argv[1];
       argc--; argv++;
+    } else if (strcmp(argv[1],"--sni") == 0) {
+      argc--; argv++;
+      servername = argv[1];
+      argc--; argv++;
     } else {
       break;
     }
   }
   if ( argc != 2) {
-    fprintf(stderr,"usage: %s <hostname>:<portnum>\n", argv[0]);
+    fprintf(stderr,"usage: %s <hostname>:<portnum>\n", progname);
     exit(0);
   }
 
@@ -250,6 +260,7 @@ int main(int argc, char *argv[])
   CHECK(SSL_CTX_set_cipher_list(ctx,cipherlist) == SSL_OK);
 
   // Setup other parameters
+#if !defined NO_SRP
   if (doSRP) {
     // Use Secure Remote Password.
     CHECK(SSL_CTX_set_srp_username(ctx, (char*)username));
@@ -259,6 +270,7 @@ int main(int argc, char *argv[])
     // Preshared key
     SSL_CTX_set_psk_client_callback(ctx, pskCallback);
   }
+#endif
 
   BIO *bio = BIO_new_connect(hostport);
   CHECK(bio != NULL);
@@ -282,6 +294,10 @@ int main(int argc, char *argv[])
     SSL_set_tlsext_status_type(ssl, TLSEXT_STATUSTYPE_ocsp);
     SSL_CTX_set_tlsext_status_cb(ctx, ocsp_resp_cb);
     SSL_CTX_set_tlsext_status_arg(ctx, stderr_bio);
+  }
+
+  if (servername != NULL) {
+     SSL_set_tlsext_host_name(ssl, servername);
   }
 
   SSL_set_connect_state(ssl);  // Can't fail, and not needed if we call SSL_connect

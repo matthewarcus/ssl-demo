@@ -7,8 +7,9 @@
 
 #if !defined SSL_LIB_H
 #define SSL_LIB_H
+
 // Many SSL functions return 1 on success, something else on failure.
-// We can't treat returns as a boolean - -ve values often are use.
+// We can't treat returns as a boolean - -ve values are often used.
 // Checking against 1 is usually correct, so define a constant for this.
 
 static const int SSL_OK = 1;
@@ -21,7 +22,7 @@ static const int SSL_OK = 1;
 // abort on error with some diagnostics.
 
 #define CHECK(e) ((e)?(void)(0):onError(#e,__FILE__,__LINE__,true))
-#define LOGCHECK(e) ((e)?(void)(0):onError(#e,__FILE__,__LINE__,false))
+#define LOGCHECK(e) ((e)?(true):(onError(#e,__FILE__,__LINE__,false),false))
 
 extern int debuglevel;
 extern int rfactor;

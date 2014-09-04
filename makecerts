@@ -1,37 +1,38 @@
 #!/bin/bash
 
+BITS=2048
+ECCURVE=secp256k1
+ECCURVE=prime192v1
 # RSA
-CRYPTO=rsa:1024
-# DSS certificates
-#CRYPTO=dsa:dsaparam.pem
-# ECDSA certificates
-#CRYPTO=ec:ecparam.pem
+CRYPTO=rsa:$BITS
+#CRYPTO=dsa:dsaparam.pem # DSS certificates
+#CRYPTO=ec:ecparam.pem # ECDSA certificates
+
+#DIGEST=-sha256
 
 # Only RSA can also be used for key exchange, so if using DSS/ECDSA need EDH,ECDH,SRP etc.
 
 EXPIRY=365
 
 # Generate parameters for various algorithms
-openssl dsaparam -out dsaparam.pem 1024
-openssl ecparam -out ecparam.pem -name secp256k1
-# An alternative curve
-#openssl ecparam -out ecparam.pem -name prime192v1
-openssl dhparam -out dhparam.pem -5 128
+openssl dsaparam -out dsaparam.pem $BITS
+openssl ecparam -out ecparam.pem -name $ECCURVE
+openssl dhparam -out dhparam.pem -5 512
 
 # Create a self-signed root CA cert
-openssl req -x509 -batch -subj '/C=GB/O=TEST ROOT/' -nodes -days $EXPIRY -newkey $CRYPTO -keyout rootkey.pem -out root.pem
+openssl req -x509 -batch -subj '/C=GB/O=TEST ROOT/' -nodes -days $EXPIRY -newkey $CRYPTO $DIGEST -keyout rootkey.pem -out root.pem
 
 ### Server ###
 
 # Create a request for second level CA certificate
-openssl req -batch -subj '/C=GB/O=TEST CA/' -nodes -newkey $CRYPTO -keyout cakey.pem -out careq.pem
+openssl req -batch -subj '/C=GB/O=TEST CA/' -nodes -newkey $CRYPTO $DIGEST -keyout cakey.pem -out careq.pem
 # and sign the request with the appropriate extensions
-openssl x509 -req -CA root.pem -CAkey rootkey.pem -CAcreateserial -days $EXPIRY -in careq.pem -out ca.pem -extfile extfile.txt
+openssl x509 -req -CA root.pem -CAkey rootkey.pem -CAcreateserial $DIGEST -days $EXPIRY -in careq.pem -out ca.pem -extfile extfile.txt
 
 # Create a request for server certificate
-openssl req -batch -subj '/C=GB/O=TEST SERVER/' -nodes -newkey $CRYPTO -keyout serverkey.pem -out serverreq.pem
+openssl req -batch -subj '/C=GB/O=TEST SERVER/CN=testserver' -nodes -newkey $CRYPTO $DIGEST -keyout serverkey.pem -out serverreq.pem
 # and sign the request
-openssl x509 -req -CA ca.pem -CAkey cakey.pem -CAcreateserial -days $EXPIRY -in serverreq.pem -out servercert.pem
+openssl x509 -req -CA ca.pem -CAkey cakey.pem -CAcreateserial $DIGEST -days $EXPIRY -in serverreq.pem -out servercert.pem -extfile ocsp.txt
 # include in server cert chain
 cat servercert.pem > serverchain.pem
 
@@ -49,14 +50,14 @@ cat ca.pem >> serverchain.pem
 #CRYPTO=rsa:1024
 
 # Create a request for another second level CA certificate
-openssl req -batch -subj '/C=GB/O=TEST CA 2/' -nodes -newkey $CRYPTO -keyout ca2key.pem -out ca2req.pem
+openssl req -batch -subj '/C=GB/O=TEST CA 2/' -nodes -newkey $CRYPTO $DIGEST -keyout ca2key.pem -out ca2req.pem
 # and sign the request with the appropriate extensions
-openssl x509 -req -CA root.pem -CAkey rootkey.pem -CAcreateserial -days $EXPIRY -in ca2req.pem -out ca2.pem -extfile extfile.txt
+openssl x509 -req -CA root.pem -CAkey rootkey.pem -CAcreateserial $DIGEST -days $EXPIRY -in ca2req.pem -out ca2.pem -extfile extfile.txt
 
 # Create a request for client certificate
-openssl req -batch -subj '/C=GB/O=TEST CLIENT/' -nodes -newkey $CRYPTO -keyout clientkey.pem -out clientreq.pem
+openssl req -batch -subj '/C=GB/O=TEST CLIENT/' -nodes -newkey $CRYPTO $DIGEST -keyout clientkey.pem -out clientreq.pem
 # and sign the request 
-openssl x509 -req -CA ca2.pem -CAkey ca2key.pem -CAcreateserial -days $EXPIRY -in clientreq.pem -out clientcert.pem
+openssl x509 -req -CA ca2.pem -CAkey ca2key.pem -CAcreateserial $DIGEST -days $EXPIRY -in clientreq.pem -out clientcert.pem
 
 # Trusted CAs for client
 cat root.pem > clientcas.pem

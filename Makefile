@@ -7,9 +7,10 @@
 
 EXES := ssl_client ssl_server
 
-#OPENSSL := openssl/current
-#INC := -I$(OPENSSL)/include
-#LIB := -L$(OPENSSL) 
+OPENSSL := openssl/current
+#OPENSSL := ../libressl
+INC := -I$(OPENSSL)/include
+LIB := -L$(OPENSSL) 
 #LIB += -Lgperftools-2.1/.libs
 #EXTRA += -ltcmalloc
 #EXTRA += -lefence
@@ -32,4 +33,3 @@ clean:
 cleanall: clean
 	rm -rf clientcerts
 	rm -f *.pem */*.pem *.srl
-

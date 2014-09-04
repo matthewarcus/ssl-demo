@@ -78,8 +78,9 @@ void describeConnection(SSL* ssl)
   CHECK(cipher != NULL);
   char *desc = SSL_CIPHER_description(cipher,buff,128);
   CHECK(desc != NULL);
-  //fprintf(stderr,"%s\n", SSLeay_version(SSLEAY_VERSION));
-  //fprintf(stderr,"renegotiation: %s\n", SSL_get_secure_renegotiation_support(ssl)?"allowed":"disallowed");  
+  fprintf(stderr,"%s\n", SSLeay_version(SSLEAY_VERSION));
+  fprintf(stderr,"renegotiation: %s\n",
+          SSL_get_secure_renegotiation_support(ssl)?"allowed":"disallowed");  
   fprintf(stderr,"%s: %s", SSL_get_version(ssl), desc);
 }
 
@@ -361,25 +362,32 @@ void setsockbuff(int fd, int buffsize)
   if (debuglevel > 3) fprintf(stderr,"SND buffer now %d\n", size);
 }
 
+#define CHECK_RESULT __attribute__((warn_unused_result))
+
 // Initiate an asynchronous renegotiation
-void renegotiate(SSL *ssl, bool server)
+bool CHECK_RESULT renegotiate(SSL *ssl, bool server)
 {
   if (debuglevel > 2) fprintf(stderr,"Renegotiating\n");
   CHECK(SSL_renegotiate(ssl) == SSL_OK);
   // On server, this results in "HelloRequest" being sent to server.
   // Allow SSL to do this in its own time on client.
   if (server) {
-    CHECK(sslDoHandshake(ssl) == SSL_OK);
+     if (!LOGCHECK(sslDoHandshake(ssl) == SSL_OK)) {
+        return false;
+     }
   }
+  return true;
 }
 
-void renegotiatefull(SSL *ssl, bool server)
+bool CHECK_RESULT renegotiatefull(SSL *ssl, bool server)
 {
   if (debuglevel > 2) fprintf(stderr,"Renegotiating\n");
   CHECK(SSL_renegotiate(ssl) == SSL_OK);
   // On server, this results in "HelloRequest" being sent to server.
   // Allow SSL to do this in its own time on client.
-  CHECK(sslDoHandshake(ssl) == SSL_OK);
+  if (!LOGCHECK(sslDoHandshake(ssl) == SSL_OK)) {
+     return false;
+  }
   if (server) {
     // Nasty hack - this makes SSL expect an immediate
     // handshake and we get an error otherwise. See:
@@ -387,8 +395,13 @@ void renegotiatefull(SSL *ssl, bool server)
     ssl->state = SSL_ST_ACCEPT;
     // Complete the handshake.
     // This fails if there is unread data from the client
-    CHECK(sslDoHandshake(ssl) == SSL_OK);
+    // This can also fail eg. if the client fails to send a certificate.
+    // Should change to softer error.
+    if (!LOGCHECK(sslDoHandshake(ssl) == SSL_OK)) {
+       return false;
+    }
   }
+  return true;
 }
 
 // Called after client verification. Return value indicates if connection
@@ -446,7 +459,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify, bool waitforpeer)
       } else {
 	inbuffer[ret] = 0;
 	if (strcmp(inbuffer, "r\n") == 0) {
-	  renegotiatefull(ssl,isserver);
+           if (!renegotiatefull(ssl,isserver)) return false;
 	} else {
 	  insize = ret;
 	  instart = 0;
@@ -479,7 +492,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify, bool waitforpeer)
 			   //SSL_VERIFY_CLIENT_ONCE |
 			   SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
 			   verifyCallback);
-	    renegotiatefull(ssl,isserver);
+	    if (!renegotiatefull(ssl,isserver)) return false;
 	    if (debuglevel > 2) fprintf(stderr,"Client verified\n");
 	  }
 	} else {
@@ -538,7 +551,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify, bool waitforpeer)
     // Now maybe start a random renegotiation
     if (!verify && insize == 0 && rfactor > 0 && rand()%rfactor == 0) {
       renegotiate_count++;
-      renegotiate(ssl,isserver);
+      if (!renegotiate(ssl,isserver)) return false;
     }
   }
   return true;
