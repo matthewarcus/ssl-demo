@@ -7,18 +7,30 @@
 
 EXES := ssl_client ssl_server
 
+# Define LIBRESSL to be the root of the desired LibreSSL source tree
+# else define OPENSSL to be the root of the desired OpenSSL source tree.
+# If neither defined, installed version of OpenSSL will be used.
+
+# eg:
+#LIBRESSL := libressl/current
 #OPENSSL := openssl/current
-#INC := -I$(OPENSSL)/include
-#LIB := -L$(OPENSSL) 
-#LIB += -Lgperftools-2.1/.libs
-#EXTRA += -ltcmalloc
-#EXTRA += -lefence
+
+ifdef LIBRESSL
+INC += -I$(LIBRESSL)/openssl/include
+EXTRA += -DNO_SRP
+OPENSSL_LIBS := $(LIBRESSL)/ssl/.libs/libssl.a $(LIBRESSL)/crypto/.libs/libcrypto.a -lrt
+else
+ifdef OPENSSL
+INC += -I$(OPENSSL)/include
+LIB += -L$(OPENSSL) 
+endif
+OPENSSL_LIBS := -lssl -lcrypto
+endif
 
 all: $(EXES)
 
 $(EXES): %: %.o
-	g++ -Wall -O2 -g $(LIB) -o $@ $^ -lssl -lcrypto -ldl $(EXTRA)
-
+	g++ -Wall -O2 -g $(LIB) -o $@ $^ $(OPENSSL_LIBS) -ldl
 
 ssl_client ssl_server: ssl_lib.o
 
