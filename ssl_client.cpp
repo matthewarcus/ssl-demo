@@ -49,7 +49,7 @@ unsigned int pskCallback(SSL *ssl, const char *hint,
 			 char *identity, unsigned int max_identity_len,
 			 unsigned char *psk, unsigned int max_psk_len)
 {
-  if (debuglevel > 1) fprintf(stderr, "PSK callback for hint '%s'\n", hint);
+  if (debuglevel > 2) fprintf(stderr, "PSK callback for hint '%s'\n", hint);
   CHECK(max_identity_len >= strlen(username));
   CHECK(max_psk_len >= strlen(password));
   strcpy(identity,username);
@@ -83,12 +83,12 @@ static int ocsp_resp_cb(SSL *s, void *arg)
 int main(int argc, char *argv[])
 {
   bool anon = false;
-  bool verbose = false;
   bool nocert = false;
   bool null = false;
   bool doSRP = false;
   bool doPSK = false;
   bool doOCSP = false;
+  bool waitforpeer = false;
   int sockbuff = 0;
 
   const char *readSessionFile = NULL;
@@ -98,10 +98,7 @@ int main(int argc, char *argv[])
 
   while (argc > 1) {
     // Options shared with server
-    if (strcmp(argv[1],"-v") == 0) {
-      verbose = true;
-      argc--; argv++;
-    } else if (strcmp(argv[1],"--noecho") == 0) {
+    if (strcmp(argv[1],"--noecho") == 0) {
       noecho = true;
       argc--; argv++;
     } else if (strcmp(argv[1],"--debug") == 0) {
@@ -134,6 +131,9 @@ int main(int argc, char *argv[])
       argc--; argv++;
     } else if (strcmp(argv[1],"--nocert") == 0) {
       nocert = true;
+      argc--; argv++;
+    } else if (strcmp(argv[1],"--wait") == 0) {
+      waitforpeer = true;
       argc--; argv++;
       //  Client options
     } else if (strcmp(argv[1],"--anon") == 0) {
@@ -226,7 +226,7 @@ int main(int argc, char *argv[])
   }
 
   // Turn on some extra logging
-  if (verbose) SSL_CTX_set_info_callback(ctx, infoCallback);
+  if (debuglevel > 2) SSL_CTX_set_info_callback(ctx, infoCallback);
 
   // What sort of ciphersuite do we want?
   if (cipherlist == NULL) {
@@ -268,11 +268,11 @@ int main(int argc, char *argv[])
   CHECK(ssl != NULL);
   SSL_set_bio(ssl,bio,bio); // Can't fail
 
-  if (verbose) showCiphers(ssl,stderr);
+  if (debuglevel > 1) showCiphers(ssl,stderr);
 
   if (readSessionFile) {
     readSession(ssl, readSessionFile);
-    if (debuglevel > 0) fprintf(stderr, "Reading session from %s\n", readSessionFile);
+    if (debuglevel > 2) fprintf(stderr, "Reading session from %s\n", readSessionFile);
   }
 
   BIO *stderr_bio = BIO_new_fp(stderr,0);
@@ -292,9 +292,11 @@ int main(int argc, char *argv[])
   if (sockbuff > 0) setsockbuff(fd,sockbuff);
   setsighandler(true);
 
-  if (verbose) {
+  if (debuglevel > 0) {
     describeConnection(ssl);
     describeSession(ssl);
+  }
+  if (debuglevel > 1) {
     describeCertificates(ssl,false);
   }
 
@@ -312,19 +314,19 @@ int main(int argc, char *argv[])
 
   //SSL_heartbeat(ssl); // !!
 
-  bool loopok = sslLoop(ssl,fd);
+  bool loopok = sslLoop(ssl,fd,false,false,waitforpeer);
 
   if (writeSessionFile != NULL) {
     if (debuglevel > 0) {
       fprintf(stderr, "Writing final session to %s\n",
 	      writeSessionFile);
+      describeSession(ssl);
     }
-    describeSession(ssl);
     writeSession(ssl, writeSessionFile);
   }
 
   if (loopok) LOGCHECK (doShutdown(ssl) == SSL_OK);
-  if (debuglevel > 0) showcounts();
+  if (debuglevel > 2) showcounts();
 
   BIO_free(stderr_bio);
 

@@ -39,7 +39,10 @@ void onError(const char *s, const char *file, int line, bool doabort)
 {
   fprintf(stderr,"'%s' failed: %s:%d\n", s, file, line);
   ERR_print_errors_fp(stderr);
-  if (doabort) abort();
+  if (doabort) {
+    fprintf(stderr,"Aborting...\n");
+    abort();
+  }
 }
 
 static volatile bool terminated = false;
@@ -75,8 +78,8 @@ void describeConnection(SSL* ssl)
   CHECK(cipher != NULL);
   char *desc = SSL_CIPHER_description(cipher,buff,128);
   CHECK(desc != NULL);
-  fprintf(stderr,"%s\n", SSLeay_version(SSLEAY_VERSION));
-  fprintf(stderr,"renegotiation: %s\n", SSL_get_secure_renegotiation_support(ssl)?"allowed":"disallowed");  
+  //fprintf(stderr,"%s\n", SSLeay_version(SSLEAY_VERSION));
+  //fprintf(stderr,"renegotiation: %s\n", SSL_get_secure_renegotiation_support(ssl)?"allowed":"disallowed");  
   fprintf(stderr,"%s: %s", SSL_get_version(ssl), desc);
 }
 
@@ -353,9 +356,9 @@ void setsockbuff(int fd, int buffsize)
   CHECK(setsockopt(fd,SOL_SOCKET,SO_RCVBUF,&size,ssize) == 0);
   CHECK(setsockopt(fd,SOL_SOCKET,SO_SNDBUF,&size,ssize) == 0);
   CHECK(getsockopt(fd,SOL_SOCKET,SO_RCVBUF,&size,&ssize) == 0);
-  if (debuglevel > 1) fprintf(stderr,"RCV buffer now %d\n", size);
+  if (debuglevel > 3) fprintf(stderr,"RCV buffer now %d\n", size);
   CHECK(getsockopt(fd,SOL_SOCKET,SO_SNDBUF,&size,&ssize) == 0);
-  if (debuglevel > 1) fprintf(stderr,"SND buffer now %d\n", size);
+  if (debuglevel > 3) fprintf(stderr,"SND buffer now %d\n", size);
 }
 
 // Initiate an asynchronous renegotiation
@@ -395,7 +398,7 @@ int verifyCallback(int preverify_ok, X509_STORE_CTX *ctx)
   return 1;
 }
 
-bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
+bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify, bool waitforpeer)
 {
   char inbuffer[NBYTES+1]; // Want to null terminate
   char netbuffer[NBYTES];
@@ -409,8 +412,8 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
     bool write_pending = insize > 0;
     fd_set rfds, wfds;
     FD_ZERO(&rfds); FD_ZERO(&wfds);
-    // Suppress ingest of data if we are renegotiating
-    if (!closed && !write_pending && !SSL_renegotiate_pending(ssl)) {
+    // Suppress ingest of data if we are renegotiating & we are the server
+    if (!closed && !write_pending && (!isserver || !SSL_renegotiate_pending(ssl))) {
       FD_SET(0, &rfds);
     }
     if (!write_pending) {
@@ -435,15 +438,11 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
     }
     if (FD_ISSET(0, &rfds)) {
       size_t ret = read(0, inbuffer,NBYTES);
-      if (debuglevel > 2) fprintf(stderr,"Read %zd bytes from 0\n", ret);
+      if (debuglevel > 4) fprintf(stderr,"Read %zd bytes from 0\n", ret);
       CHECK(ret >= 0);
       if (ret <= 0) {
 	closed = true;
-	// This implements the rule that we close the connection when
-	// the server stops reading input. Other strategies are possible.
-	//if (isserver) return true;
-	// And this implements closing when either end close
-	return true;
+	if (!waitforpeer) return true;
       } else {
 	inbuffer[ret] = 0;
 	if (strcmp(inbuffer, "r\n") == 0) {
@@ -466,7 +465,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
 	  return err == SSL_ERROR_ZERO_RETURN;
 	} else if (ret > 0) {
 	  CHECK(err == SSL_ERROR_NONE);
-	  if (debuglevel > 2) fprintf(stderr,"Read %d bytes from SSL\n", ret);
+	  if (debuglevel > 4) fprintf(stderr,"Read %d bytes from SSL\n", ret);
 	  read_ok_count++;
 	  nread += ret;
 	  if (!noecho) CHECK(write(1,netbuffer,ret) > 0);
@@ -474,7 +473,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
 	    // On first read from client, do client verification
 	    assert(isserver);
 	    verify = false;
-	    if (debuglevel > 0) fprintf(stderr,"Verifying client\n");
+	    if (debuglevel > 2) fprintf(stderr,"Verifying client\n");
 	    SSL_set_verify(ssl, 
 			   SSL_VERIFY_PEER |
 			   //SSL_VERIFY_CLIENT_ONCE |
@@ -484,6 +483,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
 	    if (debuglevel > 2) fprintf(stderr,"Client verified\n");
 	  }
 	} else {
+	  if (debuglevel > 4) fprintf(stderr,"SSL_read: err %d\n", err);
 	  if (err == SSL_ERROR_WANT_READ) {
 	    read_wantread_count++;
 	    read_wantwrite = false;
@@ -491,7 +491,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
 	    read_wantwrite_count++;
 	    read_wantwrite = true;
 	  } else {
-	    fprintf(stderr, "Error is %d\n", err);
+	    fprintf(stderr, "SSL_read: err %d\n", err);
 	    CHECK(0);
 	  }
 	  break; // On error return
@@ -514,7 +514,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
       if (ret == 0) {
 	return true;
       } else if (ret > 0) {
-	if (debuglevel > 2) fprintf(stderr,"Write %d bytes to SSL\n", ret);
+	if (debuglevel > 4) fprintf(stderr,"Write %d bytes to SSL\n", ret);
 	// Allow for partial writes
 	insize -= ret;
 	instart += ret;
@@ -523,6 +523,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify)
 	write_ok_count++;
       } else {
 	int err = SSL_get_error(ssl,ret);
+	if (debuglevel > 4) fprintf(stderr,"SSL_write: err %d\n", err);
 	if (err == SSL_ERROR_WANT_READ) {
 	  write_wantread = true;
 	  write_wantread_count++;

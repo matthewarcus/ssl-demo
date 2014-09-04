@@ -48,7 +48,7 @@ int sslConnect(SSL *ssl);
 int sslAccept(SSL *ssl);
 int sslShutdown(SSL *ssl);
 
-bool sslLoop(SSL *ssl, int fd, bool server = false, bool verify = false);
+bool sslLoop(SSL *ssl, int fd, bool server, bool verify, bool waitforpeer);
 int doShutdown(SSL *ssl);
 void sslCleanup();
 #endif
