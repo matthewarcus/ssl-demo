@@ -15,8 +15,6 @@
 #include <openssl/err.h>
 #include "ssl_lib.h"
 
-static bool verbose = false;
-
 static const char *chainfile = "serverchain.pem";
 static const char *keyfile = "serverkey.pem";
 static const char *servercasfile = "servercas.pem";
@@ -53,10 +51,10 @@ void setupDH(SSL_CTX *ctx)
   DH *dh;
   FILE *fp = fopen(dhparamfile,"r");
   if (fp == NULL) {
-    if (debuglevel > 0) fprintf(stderr,"Generating DH params\n");
+    if (debuglevel > 1) fprintf(stderr,"Generating DH params\n");
     dh = DH_generate_parameters(256,5,NULL,NULL);
   } else {
-    if (debuglevel > 0) fprintf(stderr,"Reading DH params from %s\n", dhparamfile);
+    if (debuglevel > 1) fprintf(stderr,"Reading DH params from %s\n", dhparamfile);
     dh = PEM_read_DHparams(fp,NULL,NULL,NULL);
     fclose(fp);
   }
@@ -87,9 +85,9 @@ void setupECDH(SSL_CTX *ctx)
     fclose(fp);
   }
   if (ecdh != NULL) {
-    if (debuglevel > 0) fprintf(stderr,"Reading EC key from %s\n", keyfile);
+    if (debuglevel > 2) fprintf(stderr,"Reading EC key from %s\n", keyfile);
   } else {
-    if (debuglevel > 0) fprintf(stderr,"Generating EC params\n");
+    if (debuglevel > 2) fprintf(stderr,"Generating EC params\n");
     ecdh = EC_KEY_new_by_curve_name(eccurve);
     CHECK(ecdh != NULL);
   }
@@ -121,7 +119,7 @@ int srpServerCallback(SSL *s, int *ad, void *arg)
   // error in the handshake; we then set up the SRP user data externally and
   // try again, this time it should succeed.
   if (srpData == NULL) {
-    if (debuglevel > 0) fprintf(stderr,"Deferring SRP data\n");
+    if (debuglevel > 2) fprintf(stderr,"Deferring SRP data\n");
     doSRPData = true;
     return -1; // Not ready yet
   }
@@ -129,14 +127,16 @@ int srpServerCallback(SSL *s, int *ad, void *arg)
   // srpData has been initialized, so get username.
   char *srpusername = SSL_get_srp_username(s);
   CHECK(srpusername != NULL);
-  if (debuglevel > 0) fprintf(stderr, " username = %s\n", srpusername);
+  if (debuglevel > 2) fprintf(stderr, " username = %s\n", srpusername);
   // Get data for user
   SRP_user_pwd *p = SRP_VBASE_get_by_user(srpData,srpusername);
   if (p == NULL) {
-    fprintf(stderr, "User %s doesn't exist\n", srpusername);
+    if (debuglevel > 0) {
+      fprintf(stderr, "User %s doesn't exist\n", srpusername);
+    }
     return SSL3_AL_FATAL;
   }
-  if (debuglevel > 1) {
+  if (debuglevel > 2) {
     char *tmp = NULL;
     fprintf (stderr, " g = %s\n", bn2hex(p->g,tmp));
     fprintf (stderr, " N = %s\n", bn2hex(p->N,tmp));
@@ -172,7 +172,7 @@ void setupSRPData(SSL_CTX *ctx)
     // This check seems a bit pointless, but doesn't do harm.
     char *srpCheck = SRP_check_known_gN_param(gN->g, gN->N); 
     CHECK(srpCheck != NULL);
-    if (debuglevel > 0) fprintf(stderr, "SRP check: %s\n", srpCheck);
+    if (debuglevel > 3) fprintf(stderr, "SRP check: %s\n", srpCheck);
 
     // Now create the verifier for the password.
     // We could get the password from the user at this point.
@@ -197,7 +197,7 @@ void setupSRP(SSL_CTX *ctx)
 unsigned int pskServerCallback(SSL *ssl, const char *identity,
 			       unsigned char *psk, unsigned int max_psk_len)
 {
-  if (debuglevel > 0) fprintf(stderr, "PSK callback for identity '%s'\n", identity);
+  if (debuglevel > 2) fprintf(stderr, "PSK callback for identity '%s'\n", identity);
   CHECK(max_psk_len >= strlen(password));
   strcpy((char*)psk, password);
   return strlen(password);
@@ -219,7 +219,7 @@ bool peerVerified(SSL *ssl)
 }
 
 //// Handle a single connection ////
-void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify)
+void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify, bool waitforpeer)
 {
   // This is a combination of synchronous and asynchronous I/O
   // The sockets themselves are non-blocking but for handshakes
@@ -241,22 +241,26 @@ void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify)
 #if !defined NO_SRP
     } else if (SSL_get_error(ssl,res) == SSL_ERROR_WANT_X509_LOOKUP && doSRPData) {
       // Should use some sort of callback here.
-      if (debuglevel > 0) fprintf(stderr, "Setting up SRP Data\n");
+      if (debuglevel > 2) fprintf(stderr, "Setting up SRP Data\n");
       setupSRPData(ctx);
       doSRPData = false;
 #endif
     } else {
-      fprintf(stderr,"Server SSL_accept failed: %d\n", SSL_get_error(ssl,res));
-      ERR_print_errors_fp(stderr);
+      if (debuglevel > 0) {
+	fprintf(stderr,"Server SSL_accept failed: %d\n", SSL_get_error(ssl,res));
+	ERR_print_errors_fp(stderr);
+      }
       SSL_free(ssl);
       return;
     }
   }
 
-  if (verbose) {
+  if (debuglevel > 0) {
     describeConnection(ssl);
     describeSession(ssl);
-    describeCertificates(ssl,true);
+  }
+  if (debuglevel > 1) {
+    describeCertificates(ssl,false);
   }
 
   bool verify = doVerify && !peerVerified(ssl);
@@ -271,7 +275,7 @@ void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify)
 
   // sslLoop returns false if the socket closed
   // abruptly, in which case, don't try SSL_shutdown.
-  bool loopok = sslLoop(ssl,fd,true,verify);
+  bool loopok = sslLoop(ssl,fd,true,verify,waitforpeer);
 
   if (!loopok) {
      fprintf(stderr, "Closing connection on error\n");
@@ -292,6 +296,8 @@ int main(int argc, char *argv[])
   bool nocert = false;
   bool noticket = false;
   bool verify_client = false;
+  bool waitforpeer = false;
+  bool daemonize = false;
   bool doDH = false;    // Diffie-Helman key exchange
   bool doECDH = false;  // Elliptic curve Diffie-Helman
 #if !defined NO_SRP
@@ -305,10 +311,7 @@ int main(int argc, char *argv[])
   const SSL_METHOD *method = SSLv23_server_method();
   while (argc > 1) {
     // Options shared with client
-    if (strcmp(argv[1],"-v") == 0) {
-      verbose = true;
-      argc--; argv++;
-    } else if (strcmp(argv[1],"--noecho") == 0) {
+  if (strcmp(argv[1],"--noecho") == 0) {
       noecho = true;
       argc--; argv++;
     } else if (strcmp(argv[1],"--debug") == 0) {
@@ -345,6 +348,12 @@ int main(int argc, char *argv[])
       // Server options
     } else if (strcmp(argv[1],"--noticket") == 0) {
       noticket = true;
+      argc--; argv++;
+    } else if (strcmp(argv[1],"--wait") == 0) {
+      waitforpeer = true;
+      argc--; argv++;
+    } else if (strcmp(argv[1],"--daemonize") == 0) {
+      daemonize = true;
       argc--; argv++;
     } else if (strcmp(argv[1],"--verifyclient") == 0) {
       verify_client = true;
@@ -430,7 +439,7 @@ int main(int argc, char *argv[])
 				       (const unsigned char*)context, 
 				       strlen(context)) == SSL_OK);
 
-  if (verbose) SSL_CTX_set_info_callback(ctx, infoCallback);
+  if (debuglevel > 2) SSL_CTX_set_info_callback(ctx, infoCallback);
 
   BIO *server = BIO_new_accept(portnum);
   CHECK(server != NULL);
@@ -443,14 +452,25 @@ int main(int argc, char *argv[])
   // First accept is like listen.
   int ret = BIO_do_accept(server);
   if (ret <= 0) {
-    fprintf(stderr,"BIO_do_accept\n");
+    fprintf(stderr,"BIO_do_accept failed: %d\n", ret);
   } else {
+    // Mainly here for the benefit of test scripts
+    if (daemonize) {
+      if (fork() != 0) exit(0);
+      setsid();
+      if (fork() != 0) exit(0);
+      FILE *f = fopen("server.pid","w");
+      CHECK(f != NULL);
+      fprintf(f,"%u\n",getpid());
+      fclose(f);
+      waitforpeer = true;
+    }
     do { 
       // Second accept is like accept.
       if (BIO_do_accept(server) <= 0) break;
       BIO *bio = BIO_pop(server);
       CHECK(bio != NULL);
-      doConnection(ctx, bio, verify_client);
+      doConnection(ctx, bio, verify_client, waitforpeer);
     } while (!once);
   }
   BIO_free(server);
@@ -460,4 +480,5 @@ int main(int argc, char *argv[])
 #endif
   SSL_CTX_free(ctx);
   sslCleanup();
+  if (debuglevel > 2) fprintf(stderr, "Server terminated\n");
 }

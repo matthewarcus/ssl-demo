@@ -44,4 +44,3 @@ clean:
 cleanall: clean
 	rm -rf clientcerts
 	rm -f *.pem */*.pem *.srl
-
