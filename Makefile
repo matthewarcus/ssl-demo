@@ -15,8 +15,11 @@ EXES := ssl_client ssl_server
 #LIBRESSL := libressl/current
 #OPENSSL := openssl/current
 
+# Be careful that you really are getting the right headers & not eg. including
+# LibreSSL headers but linking with OpenSSL libraries or vice versa.
+
 ifdef LIBRESSL
-INC += -I$(LIBRESSL)/openssl/include
+INC += -I$(LIBRESSL)/include
 EXTRA += -DNO_SRP
 OPENSSL_LIBS := $(LIBRESSL)/ssl/.libs/libssl.a $(LIBRESSL)/crypto/.libs/libcrypto.a -lrt
 else
@@ -30,12 +33,12 @@ endif
 all: $(EXES)
 
 $(EXES): %: %.o
-	g++ -Wall -O2 -g $(LIB) -o $@ $^ $(OPENSSL_LIBS) -ldl
+	g++ -Wall -g $(LIB) -o $@ $^ $(OPENSSL_LIBS) -ldl
 
 ssl_client ssl_server: ssl_lib.o
 
 ssl_client.o ssl_server.o ssl_lib.o: %.o: %.cpp ssl_lib.h
-	g++ -Wall -O2 -g $(INC) $(EXTRA) -c -Wshadow -o $@ $<
+	g++ -Wall -g -O2 $(INC) $(EXTRA) -c -Wshadow -o $@ $<
 
 test: ssl_server ssl_client test.sh
 	./test.sh

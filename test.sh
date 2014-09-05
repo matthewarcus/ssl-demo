@@ -32,7 +32,7 @@ killserver() {
 check() {
     TEST=$1; FILE=$2; TEXT=$3
     (egrep "$TEXT" "$FILE" > /dev/null && echo "PASS: $TEST" ) ||
-     echo "FAIL: $TEST: not found \"$TEXT\" in $FILE"
+     (echo "FAIL: $TEST: not found \"$TEXT\" in $FILE:"; cat $FILE)
 }
 
 # Establish client/server connection and check that data sent
@@ -42,7 +42,7 @@ test1() {
  NAME=$1; SARGS=$2; CARGS=$3
 
  # Daemonizing doesn't work here with the server reading stdin
- cat $DATAFILE | tee $INFILE | $SERVER $SARGS $PORT >/dev/null 2>$SVRLOG &
+ cat $DATAFILE | (tee 2>/dev/null $INFILE) | $SERVER $SARGS $PORT >/dev/null 2>$SVRLOG &
  echo $! > $serverpidfile
  sleep 1
  (echo hello | $CLIENT --debug 1 --wait $CARGS localhost:$PORT >$OUTFILE 2>$RUNLOG) || echo "FAIL: $NAME client failure"
@@ -55,7 +55,7 @@ test1() {
 test2() {
     NAME=$1; SARGS=$2; CARGS=$3
     $SERVER --daemonize --wait $SARGS $PORT >$OUTFILE 2>$SVRLOG
-    ((echo hello; sleep 1; cat $DATAFILE) | tee $INFILE | $CLIENT --debug 1 $CARGS localhost:$PORT >/dev/null 2>$RUNLOG) || echo "FAIL: $NAME client failure"
+    ((echo hello; sleep 1; cat $DATAFILE) | (tee 2>/dev/null $INFILE) | $CLIENT --debug 1 $CARGS localhost:$PORT >/dev/null 2>$RUNLOG) || echo "FAIL: $NAME client failure"
     #ls -l $INFILE $OUTFILE
     (diff $INFILE $OUTFILE > /dev/null && echo "PASS: $NAME") || echo "FAIL: $NAME"
     [ $SHOWLOG ] && cat $RUNLOG
@@ -141,7 +141,7 @@ teste() {
 # Start with a clean slate
 killserver
 testa
-# testb
-# testc
-# testd
-# teste
+testb
+testc
+testd
+teste
