@@ -32,6 +32,9 @@ void onError(const char *s, const char *file, int line, bool doabort);
 void setsighandler(bool once);
 void setsockbuff(int fd, int buffsize);
 
+void checkVersion();
+
+void describeVersion();
 void describeSession(SSL *ssl);
 void describeConnection(SSL* ssl);
 void describeCertificates(SSL* ssl, bool isServer);

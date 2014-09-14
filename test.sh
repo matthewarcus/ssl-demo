@@ -6,7 +6,6 @@ DATAFILE=./ssl_server
 INFILE=$TMPDIR/ssl_test_in
 OUTFILE=$TMPDIR/ssl_test_out
 RUNLOG=$TMPDIR/run.log
-SVRLOG=$TMPDIR/svr.log
 
 PORT=5999
 serverpidfile=server.pid
@@ -24,7 +23,7 @@ killserver() {
  if [ -e $serverpidfile ]
  then
      #echo Killing server `cat $serverpidfile`
-     kill -INT `cat $serverpidfile`
+     kill -INT `cat $serverpidfile` 2>/dev/null
      rm $serverpidfile
  fi
 }
@@ -42,10 +41,11 @@ test1() {
  NAME=$1; SARGS=$2; CARGS=$3
 
  # Daemonizing doesn't work here with the server reading stdin
- cat $DATAFILE | (tee 2>/dev/null $INFILE) | $SERVER $SARGS $PORT >/dev/null 2>$SVRLOG &
+ cat $DATAFILE | (tee 2>/dev/null $INFILE) | $SERVER $SARGS $PORT >/dev/null &
  echo $! > $serverpidfile
  sleep 1
- (echo hello | $CLIENT --debug 1 --wait $CARGS localhost:$PORT >$OUTFILE 2>$RUNLOG) || echo "FAIL: $NAME client failure"
+ (echo hello | $CLIENT --debug 1 --wait $CARGS localhost:$PORT >$OUTFILE 2>$RUNLOG) || 
+ (echo "FAIL: $NAME client failure"; cat $RUNLOG)
  #ls -l $INFILE $OUTFILE
  (diff $INFILE $OUTFILE > /dev/null && echo "PASS: $NAME") || echo "FAIL: $NAME"
  [ $SHOWLOG ] && cat $RUNLOG
@@ -54,7 +54,7 @@ test1() {
 
 test2() {
     NAME=$1; SARGS=$2; CARGS=$3
-    $SERVER --daemonize --wait $SARGS $PORT >$OUTFILE 2>$SVRLOG
+    $SERVER --daemonize --wait $SARGS $PORT >$OUTFILE
     ((echo hello; sleep 1; cat $DATAFILE) | (tee 2>/dev/null $INFILE) | $CLIENT --debug 1 $CARGS localhost:$PORT >/dev/null 2>$RUNLOG) || echo "FAIL: $NAME client failure"
     #ls -l $INFILE $OUTFILE
     (diff $INFILE $OUTFILE > /dev/null && echo "PASS: $NAME") || echo "FAIL: $NAME"
@@ -65,6 +65,9 @@ test2() {
 testa() {
     test1 "Basic>" "" ""
     test2 "Basic<" "" ""
+}
+
+testsrp1() {
     test1 "SRP1>" "--srp" "--srp --user user --password password"
     check "SRP ciphersuite 1" "$RUNLOG" "SRP-"
     test2 "SRP1<" "--srp" "--srp --user user --password password"
@@ -73,11 +76,14 @@ testa() {
     test2 "SRP2<" "--srp --nocert" "--srp --user user --password password"
     test1 "SRP3>" "--srp" "--srp --user user --password password --cipherlist SRP-AES-256-CBC-SHA"
     test2 "SRP3<" "--srp" "--srp --user user --password password --cipherlist SRP-AES-256-CBC-SHA"
-    test1 "ecdh>" "--srp --ecdh" ""
+}
+
+testa2() {
+    test1 "ecdh>" "--ecdh" ""
     check "ECDH ciphersuite 1" "$RUNLOG" "ECDHE-"
-    test2 "ecdh<" "--srp --ecdh" ""
+    test2 "ecdh<" "--ecdh" ""
     check "ECDH ciphersuite 2" "$RUNLOG" "ECDHE-"
-    test1 "clientverify>" "--srp --ecdh --verifyclient" ""
+    test1 "clientverify>" "--ecdh --verifyclient" ""
     # This should wait until the renegotiation has happened before sending more data
     test2 "clientverify<" "--verifyclient" ""
 }
@@ -107,7 +113,7 @@ testc() {
 }
 
 # Check that SRP fails as expected with invalid user
-testd() {
+testsrp2() {
     NAME="SRP invalid user"
     $SERVER --daemonize --srp --wait $PORT > /dev/null
     $CLIENT --debug 3 --srp --user invalid --password invalid localhost:$PORT 2> $RUNLOG
@@ -120,7 +126,6 @@ teste() {
     DEBUG=0
     # Data server to client. Server renegotiating. Should work
     test1 "Renegotiate1>" "--rfactor 10" "--debug $DEBUG"
-    cat $SVRLOG
     cat $RUNLOG
     # Data client to server. Server renegotiating. Won't work
     #test2 "Renegotiate1<" "--rfactor 10" "--debug $DEBUG"
@@ -129,7 +134,6 @@ teste() {
 
     # Data client to server. Client renegotiating. Should work
     test2 "Renegotiate2<" "" "--debug $DEBUG --rfactor 10"
-    cat $SVRLOG
     cat $RUNLOG
 
     # Data server to client. Client renegotiating, won't work
@@ -141,7 +145,9 @@ teste() {
 # Start with a clean slate
 killserver
 testa
+testa2
 testb
 testc
-testd
 teste
+testsrp1
+testsrp2

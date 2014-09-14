@@ -16,7 +16,8 @@ EXES := ssl_client ssl_server
 #OPENSSL := openssl/current
 
 # Be careful that you really are getting the right headers & not eg. including
-# LibreSSL headers but linking with OpenSSL libraries or vice versa.
+# LibreSSL headers but linking with OpenSSL libraries or vice versa, though
+# we now check at runtime for consistency.
 
 ifdef LIBRESSL
 INC += -I$(LIBRESSL)/include

@@ -35,6 +35,21 @@ static int select_count = 0;
 static size_t nread = 0;
 static size_t nwritten = 0;
 
+void checkVersion()
+{
+  const char *header = OPENSSL_VERSION_TEXT;
+  unsigned long header_num = SSLEAY_VERSION_NUMBER;
+  const char *library = SSLeay_version(SSLEAY_VERSION);
+  unsigned long library_num = SSLeay();
+  // If this check fails, we have probably got a header/library mismatch
+  if (strcmp(header,library) != 0 || header_num != library_num) {
+    fprintf(stderr,"Version mismatch:\n");
+    fprintf(stderr,"Header:  %lx: %s\n", header_num, header);
+    fprintf(stderr,"Library: %lx: %s\n", library_num, library);
+    abort();
+  }
+}
+
 void onError(const char *s, const char *file, int line, bool doabort)
 {
   fprintf(stderr,"'%s' failed: %s:%d\n", s, file, line);
@@ -71,6 +86,13 @@ void showCiphers(SSL *ssl, FILE *file)
   fprintf(file,"\n");
 }
 
+void describeVersion()
+{
+  const char *version = SSLeay_version(SSLEAY_VERSION);
+  unsigned long version_num = SSLeay();
+  fprintf(stderr,"%s [%lx]\n", version, version_num);
+}
+
 void describeConnection(SSL* ssl)
 {
   char buff[128];
@@ -78,7 +100,6 @@ void describeConnection(SSL* ssl)
   CHECK(cipher != NULL);
   char *desc = SSL_CIPHER_description(cipher,buff,128);
   CHECK(desc != NULL);
-  fprintf(stderr,"%s\n", SSLeay_version(SSLEAY_VERSION));
   fprintf(stderr,"renegotiation: %s\n",
           SSL_get_secure_renegotiation_support(ssl)?"allowed":"disallowed");  
   fprintf(stderr,"%s: %s", SSL_get_version(ssl), desc);
@@ -496,7 +517,6 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify, bool waitforpeer)
 	    if (debuglevel > 2) fprintf(stderr,"Client verified\n");
 	  }
 	} else {
-	  if (debuglevel > 4) fprintf(stderr,"SSL_read: err %d\n", err);
 	  if (err == SSL_ERROR_WANT_READ) {
 	    read_wantread_count++;
 	    read_wantwrite = false;
@@ -536,7 +556,6 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify, bool waitforpeer)
 	write_ok_count++;
       } else {
 	int err = SSL_get_error(ssl,ret);
-	if (debuglevel > 4) fprintf(stderr,"SSL_write: err %d\n", err);
 	if (err == SSL_ERROR_WANT_READ) {
 	  write_wantread = true;
 	  write_wantread_count++;
@@ -544,6 +563,7 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify, bool waitforpeer)
 	  write_wantread = false;
 	  write_wantwrite_count++;
 	} else {
+          fprintf(stderr,"SSL_write: err %d\n", err);
 	  CHECK(0);
 	}
       }

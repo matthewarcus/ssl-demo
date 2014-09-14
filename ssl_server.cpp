@@ -22,8 +22,10 @@ static const char *dhparamfile = "dhparam.pem";
 
 // openssl ecparam -list_curves to find more or look
 // at /usr/include/openssl/obj_mac.h
-int eccurve = NID_secp256k1;
-//int eccurve = NID_X9_62_prime256v1;
+//int eccurve = NID_secp256k1;
+//int eccurve = NID_secp384r1;
+// This seems to be the much-loved secp256r1 curve.
+int eccurve = NID_X9_62_prime256v1;
 
 #if !defined NO_SRP
 static const char *username = "user";
@@ -70,11 +72,10 @@ void setupDH(SSL_CTX *ctx)
   DH_free(dh);
 }
 
-// Set up parameters for ephemeral elliptic curve Diffie-Helman.
-// For maximum Forward Secrecy
 // Get an EC_KEY from the serverkey.pem file if possible
-// Else generate a new one.
-void setupECDH(SSL_CTX *ctx)
+// else generate a new one.
+
+EC_KEY *getECDH() 
 {
   EC_KEY *ecdh = NULL;
   // Try and read an EC key from the serverkey file.
@@ -91,7 +92,19 @@ void setupECDH(SSL_CTX *ctx)
     ecdh = EC_KEY_new_by_curve_name(eccurve);
     CHECK(ecdh != NULL);
   }
-    
+  return ecdh;
+}
+
+// Set up parameters for ephemeral elliptic curve Diffie-Helman.
+// For maximum Forward Secrecy
+// We are supposed to check what curves the client supports and
+// choose accordingly, but OpenSSL doesn't support that very well
+// at the moment (Version 1.02 should fix this with
+// SSL_CTX_set_ecdh_auto(ctx, 1))
+void setupECDH(SSL_CTX *ctx)
+{
+  //SSL_CTX_set_tmp_ecdh_callback(ctx,ecdh_callback);
+  EC_KEY *ecdh = getECDH();
   CHECK(SSL_CTX_set_tmp_ecdh(ctx, ecdh) == SSL_OK);
   EC_KEY_free(ecdh);
 }
@@ -280,10 +293,10 @@ void doConnection(SSL_CTX *ctx, BIO *bio, bool doVerify, bool waitforpeer)
   if (!loopok) {
      fprintf(stderr, "Closing connection on error\n");
   } else {     
-     if (verify) {
-        if (debuglevel > 0) fprintf(stderr,"Server renegotiated for client verification:\n");
-        describeSession(ssl);
-        describeCertificates(ssl,true);
+     if (verify && debuglevel > 0) {
+       fprintf(stderr,"Server renegotiated for client verification:\n");
+       describeSession(ssl);
+       describeCertificates(ssl,true);
      }
      LOGCHECK (doShutdown(ssl) == SSL_OK);
   }
@@ -305,8 +318,13 @@ int main(int argc, char *argv[])
   bool doSRP = false;   // Secure remote password
 #endif
   bool once = false;    // Serve just one connection, eg. for valgrind test
+  // For actual security, 'ECDH:RSA:ALL !DH !RC4 !DES !SRP !PSK !aNULL !eNULL' passes
+  // the SSL Labs test.
   // Allow ADH/AECDH/SRP as well as NULL for testing
-  const char *cipherlist = "ALL:NULL";
+  const char *cipherlist = "ALL:aNULL:eNULL";
+
+  // Check header/library consistency
+  checkVersion();
 
   const SSL_METHOD *method = SSLv23_server_method();
   while (argc > 1) {
@@ -386,6 +404,8 @@ int main(int argc, char *argv[])
 
   char *portnum = argv[1];
 
+  if (debuglevel > 0) describeVersion();
+
   SSL_library_init();
   OpenSSL_add_all_algorithms();
   SSL_load_error_strings();
@@ -408,6 +428,8 @@ int main(int argc, char *argv[])
   // Avoids a nasty hack involving using a different session id context
   // when renegotiating a connection with client verification.
   options |= SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION;
+  // Server knows best for cipher choice 
+  options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
   // Don't use stateless session reuse, but old-style session ids.
   if (noticket) options |= SSL_OP_NO_TICKET;
   if (doDH) options |= SSL_OP_SINGLE_DH_USE; // Nothing to check here

@@ -102,6 +102,8 @@ int main(int argc, char *argv[])
   const char *servername = NULL;
   const char *progname = argv[0];
 
+  checkVersion();
+
   while (argc > 1) {
     // Options shared with server
     if (strcmp(argv[1],"--noecho") == 0) {
@@ -193,6 +195,8 @@ int main(int argc, char *argv[])
   memset(&act,0,sizeof(act));
   act.sa_handler = SIG_IGN;
   sigaction(SIGPIPE, &act, NULL);
+
+  if (debuglevel > 0) describeVersion();
 
   SSL_library_init();
   OpenSSL_add_all_algorithms();
