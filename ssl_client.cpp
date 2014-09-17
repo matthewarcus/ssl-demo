@@ -23,10 +23,10 @@ static const char *syscasdir = "/etc/ssl/certs";
 static const char *localcasdir = "clientcerts";
 
 
-//static const char *username = "user";
-//static const char *password = "password";
-static const char *username = NULL;
-static const char *password = NULL;
+static const char *username = "user";
+static const char *password = "password";
+//static const char *username = NULL;
+//static const char *password = NULL;
 
 #if !defined NO_SRP
 // Return the SRP password
@@ -57,7 +57,7 @@ unsigned int pskCallback(SSL *ssl, const char *hint,
   CHECK(max_psk_len >= strlen(password));
   strcpy(identity,username);
   strcpy((char*)psk,password);
-  return strlen(password);
+  return strlen((char *)psk);
 }
 #endif
 
