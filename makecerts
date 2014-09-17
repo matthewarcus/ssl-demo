@@ -1,14 +1,14 @@
 #!/bin/bash
 
 BITS=2048
-ECCURVE=secp256k1
-ECCURVE=prime192v1
+#ECCURVE=secp256k1
+ECCURVE=prime256v1
 # RSA
 CRYPTO=rsa:$BITS
 #CRYPTO=dsa:dsaparam.pem # DSS certificates
 #CRYPTO=ec:ecparam.pem # ECDSA certificates
 
-#DIGEST=-sha256
+DIGEST=-sha256
 
 # Only RSA can also be used for key exchange, so if using DSS/ECDSA need EDH,ECDH,SRP etc.
 
