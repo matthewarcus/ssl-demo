@@ -218,7 +218,7 @@ unsigned int pskServerCallback(SSL *ssl, const char *identity,
 
 void setupPSK(SSL_CTX *ctx)
 {
-  CHECK(SSL_CTX_use_psk_identity_hint(ctx, "username") == SSL_OK);
+  CHECK(SSL_CTX_use_psk_identity_hint(ctx, "psk hint") == SSL_OK);
   SSL_CTX_set_psk_server_callback(ctx, pskServerCallback);
 }
 #endif
@@ -425,6 +425,7 @@ int main(int argc, char *argv[])
 
   long options = 0;
   options |= SSL_OP_NO_SSLv2;
+  // options |= SSL_OP_NO_SSLv3; // Disallow obsolete protocols
   // Avoids a nasty hack involving using a different session id context
   // when renegotiating a connection with client verification.
   options |= SSL_OP_NO_SESSION_RESUMPTION_ON_RENEGOTIATION;
