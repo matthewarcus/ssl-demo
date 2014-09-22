@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <assert.h>
 #include <signal.h>
+#include <string>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
@@ -101,8 +102,10 @@ int main(int argc, char *argv[])
   const SSL_METHOD *method = SSLv23_client_method();
   const char *servername = NULL;
   const char *progname = argv[0];
-
   checkVersion();
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+  std::string alpn_protos;
+#endif
 
   while (argc > 1) {
     // Options shared with server
@@ -129,6 +132,16 @@ int main(int argc, char *argv[])
       argc--; argv++;
       cipherlist = argv[1];
       argc--; argv++;
+    } else if (strcmp(argv[1],"--alpn") == 0) {
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+      argc--; argv++;
+      alpn_protos += (char)strlen(argv[1]);
+      alpn_protos += argv[1];
+      argc--; argv++;
+#else 
+      fprintf(stderr,"Error: ALPN needs OpenSSL 1.02+\n");
+      exit(0);
+#endif
     } else if (strcmp(argv[1],"--rfactor") == 0) {
       argc--; argv++;
       rfactor = atoi(argv[1]);
@@ -303,6 +316,15 @@ int main(int argc, char *argv[])
   if (servername != NULL) {
      SSL_set_tlsext_host_name(ssl, servername);
   }
+
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+  if (alpn_protos.length() > 0) {
+     fprintf(stderr, "Setting ALPN: %s\n", alpn_protos.c_str());
+     SSL_set_alpn_protos(ssl, 
+                         (unsigned char *)alpn_protos.data(), 
+                         alpn_protos.length());
+  }
+#endif
 
   SSL_set_connect_state(ssl);  // Can't fail, and not needed if we call SSL_connect
 
