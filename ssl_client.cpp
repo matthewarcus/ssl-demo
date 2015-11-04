@@ -6,6 +6,7 @@
 // ----------------------------------------------------------------------------
 
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <assert.h>
 #include <signal.h>
@@ -15,7 +16,12 @@
 #include <openssl/rand.h>
 #include <openssl/pem.h>
 #include <openssl/ocsp.h>
+
 #include "ssl_lib.h"
+
+#if !defined LIBRESSL_VERSION_NUMBER && OPENSSL_VERSION_NUMBER >= 0x10002000L
+#define USE_ALPN
+#endif
 
 static const char *certFile = "clientcert.pem";
 static const char *keyFile = "clientkey.pem";
@@ -103,7 +109,7 @@ int main(int argc, char *argv[])
   const char *servername = NULL;
   const char *progname = argv[0];
   checkVersion();
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+#if defined USE_ALPN
   std::string alpn_protos;
 #endif
 
@@ -133,7 +139,7 @@ int main(int argc, char *argv[])
       cipherlist = argv[1];
       argc--; argv++;
     } else if (strcmp(argv[1],"--alpn") == 0) {
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+#if defined USE_ALPN
       argc--; argv++;
       alpn_protos += (char)strlen(argv[1]);
       alpn_protos += argv[1];
@@ -317,7 +323,7 @@ int main(int argc, char *argv[])
      SSL_set_tlsext_host_name(ssl, servername);
   }
 
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L
+#if defined USE_ALPN
   if (alpn_protos.length() > 0) {
      fprintf(stderr, "Setting ALPN: %s\n", alpn_protos.c_str());
      SSL_set_alpn_protos(ssl, 

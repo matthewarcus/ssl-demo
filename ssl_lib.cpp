@@ -6,6 +6,7 @@
 // ----------------------------------------------------------------------------
 
 #include <stdio.h>
+#include <string.h>
 #include <assert.h>
 #include <unistd.h>
 #include <signal.h>
@@ -35,12 +36,24 @@ static int select_count = 0;
 static size_t nread = 0;
 static size_t nwritten = 0;
 
+#define CHECK_RESULT __attribute__((warn_unused_result))
+
+// Backwards compatibility
+#if defined LIBRESSL_VERSION_NUMBER || OPENSSL_VERSION_NUMBER < 0x10100000L
+#define OpenSSL_version(x) (SSLeay_version(x))
+#define OPENSSL_VERSION SSLEAY_VERSION
+#define OpenSSL_version_num() SSLeay()
+#endif
+
+// Since I'm often building my own libraries, check for
+// consistency with the headers, in case of build problems.
+
 void checkVersion()
 {
   const char *header = OPENSSL_VERSION_TEXT;
-  unsigned long header_num = SSLEAY_VERSION_NUMBER;
-  const char *library = SSLeay_version(SSLEAY_VERSION);
-  unsigned long library_num = SSLeay();
+  unsigned long header_num = OPENSSL_VERSION_NUMBER;
+  const char *library = OpenSSL_version(OPENSSL_VERSION);
+  unsigned long library_num = OpenSSL_version_num();
   // If this check fails, we have probably got a header/library mismatch
   if (strcmp(header,library) != 0 || header_num != library_num) {
     fprintf(stderr,"Version mismatch:\n");
@@ -88,9 +101,9 @@ void showCiphers(SSL *ssl, FILE *file)
 
 void describeVersion()
 {
-  const char *version = SSLeay_version(SSLEAY_VERSION);
-  unsigned long version_num = SSLeay();
-  fprintf(stderr,"%s [%lx]\n", version, version_num);
+  const char *version = OPENSSL_VERSION_TEXT;
+  unsigned long version_num = OPENSSL_VERSION_NUMBER;
+  fprintf(stderr,"%s [0x%lxL]\n", version, version_num);
 }
 
 void describeConnection(SSL* ssl)
@@ -154,27 +167,37 @@ void describeSession(SSL *ssl)
 {
   SSL_SESSION *session = SSL_get_session(ssl);
   CHECK(session != NULL);
+  {
+    unsigned int len;
+    const unsigned char *id = SSL_SESSION_get_id(session, &len);
+    char *s = hex_to_string(id,len);
+    fprintf(stderr, "Session ID: %s\n", s);
+    OPENSSL_free(s);
+  }
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+  {
+    char *s = hex_to_string(session->sid_ctx,
+                            session->sid_ctx_length);
 
-  char *s;
-
-  s = hex_to_string(session->session_id,
-                    session->session_id_length);
-  fprintf(stderr, "Session ID: %s\n", s);
-  OPENSSL_free(s);
-
-  s = hex_to_string(session->sid_ctx,
-                    session->sid_ctx_length);
-
-  fprintf(stderr, "Session ID CTX: %s\n", s);
-  OPENSSL_free(s);
-#if 0
-  if (session->tlsext_ticklen > 0) {
-    s = hex_to_string(session->tlsext_tick,
-                      session->tlsext_ticklen);
-    fprintf(stderr, "Session Ticket: %s\n", s);
+    fprintf(stderr, "Session ID CTX: %s\n", s);
     OPENSSL_free(s);
   }
 #endif
+  {
+    unsigned char *ticket;
+    size_t ticklen;
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+    SSL_SESSION_get0_ticket(session, &ticket, &ticklen);
+#else
+    ticket = session->tlsext_tick;
+    ticklen = session->tlsext_ticklen;
+#endif
+    if (ticklen > 0) {
+      char *s = hex_to_string(ticket,ticklen);
+      fprintf(stderr, "Session Ticket: %s\n", s);
+      OPENSSL_free(s);
+    }
+  }
 }
 
 void writeSession(SSL *ssl, const char *filename)
@@ -383,14 +406,12 @@ void setsockbuff(int fd, int buffsize)
   if (debuglevel > 3) fprintf(stderr,"SND buffer now %d\n", size);
 }
 
-#define CHECK_RESULT __attribute__((warn_unused_result))
-
 // Initiate an asynchronous renegotiation
 bool CHECK_RESULT renegotiate(SSL *ssl, bool server)
 {
   if (debuglevel > 2) fprintf(stderr,"Renegotiating\n");
   CHECK(SSL_renegotiate(ssl) == SSL_OK);
-  // On server, this results in "HelloRequest" being sent to server.
+  // On server, this results in "HelloRequest" being sent to client.
   // Allow SSL to do this in its own time on client.
   if (server) {
      if (!LOGCHECK(sslDoHandshake(ssl) == SSL_OK)) {
@@ -409,6 +430,9 @@ bool CHECK_RESULT renegotiatefull(SSL *ssl, bool server)
   if (!LOGCHECK(sslDoHandshake(ssl) == SSL_OK)) {
      return false;
   }
+#if defined LIBRESSL_VERSION_NUMBER || OPENSSL_VERSION_NUMBER < 0x10100000L
+  // [Now, mercifully, seems to be unnecessary in the main OpenSSL branch]
+  // [Just as well, as it doesn't compile any more]
   if (server) {
     // Nasty hack - this makes SSL expect an immediate
     // handshake and we get an error otherwise. See:
@@ -422,6 +446,7 @@ bool CHECK_RESULT renegotiatefull(SSL *ssl, bool server)
        return false;
     }
   }
+#endif
   return true;
 }
 
@@ -450,19 +475,16 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify, bool waitforpeer)
     if (!closed && !write_pending && (!isserver || !SSL_renegotiate_pending(ssl))) {
       FD_SET(0, &rfds);
     }
-    if (!write_pending) {
-      if (!read_wantwrite) {
-	FD_SET(fd, &rfds);
-      } else {
-	FD_SET(fd, &wfds);
-      }
-    }
     if (write_pending) {
       if (write_wantread) {
 	FD_SET(fd, &rfds);
       } else {
 	FD_SET(fd, &wfds);
       }
+    } else if (!read_wantwrite) {
+      FD_SET(fd, &rfds);
+    } else {
+      FD_SET(fd, &wfds);
     }
     {
       int ret = select(fd+1,&rfds,&wfds,NULL,NULL);

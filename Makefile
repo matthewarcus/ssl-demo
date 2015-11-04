@@ -5,6 +5,7 @@
 # You can do whatever you like with this code.
 # ----------------------------------------------------------------------------
 
+CXX := g++
 EXES := ssl_client ssl_server
 
 # Define LIBRESSL to be the root of the desired LibreSSL source tree
@@ -14,6 +15,7 @@ EXES := ssl_client ssl_server
 # eg:
 #LIBRESSL := libressl/current
 #OPENSSL := openssl/current
+OPENSSL := openssl/devel
 
 # Be careful that you really are getting the right headers & not eg. including
 # LibreSSL headers but linking with OpenSSL libraries or vice versa, though
@@ -34,12 +36,12 @@ endif
 all: $(EXES)
 
 $(EXES): %: %.o
-	g++ -Wall -g $(LIB) -o $@ $^ $(OPENSSL_LIBS) -ldl
+	$(CXX) -Wall -g $(LIB) -o $@ $^ $(OPENSSL_LIBS) -ldl
 
 ssl_client ssl_server: ssl_lib.o
 
 ssl_client.o ssl_server.o ssl_lib.o: %.o: %.cpp ssl_lib.h
-	g++ -Wall -g -O2 $(INC) $(EXTRA) -c -Wshadow -o $@ $<
+	$(CXX) -Wall -g -O2 $(INC) $(EXTRA) -c -Wshadow -o $@ $<
 
 test: ssl_server ssl_client test.sh
 	./test.sh

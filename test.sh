@@ -67,6 +67,18 @@ testa() {
     test2 "Basic<" "" ""
 }
 
+testpsk() {
+    test1 "PSK1>" "--psk" "--psk --user user --password password"
+    check "PSK ciphersuite 1" "$RUNLOG" "PSK-"
+    test2 "PSK1<" "--psk" "--psk --user user --password password"
+    test1 "PSK2>" "--psk --nocert" "--psk --user user --password password"
+    check "PSK ciphersuite 2" "$RUNLOG" "PSK-AES"
+    test2 "PSK2<" "--psk --nocert" "--psk --user user --password password"
+    test1 "PSK3>" "--psk" "--psk --user user --password password --cipherlist PSK-AES256-CBC-SHA"
+    test2 "PSK3<" "--psk" "--psk --user user --password password --cipherlist PSK-AES256-CBC-SHA"
+    check "PSK ciphersuite 3" "$RUNLOG" "PSK-AES"
+}
+
 testsrp1() {
     test1 "SRP1>" "--srp" "--srp --user user --password password"
     check "SRP ciphersuite 1" "$RUNLOG" "SRP-"
@@ -128,9 +140,9 @@ teste() {
     test1 "Renegotiate1>" "--rfactor 10" "--debug $DEBUG"
     cat $RUNLOG
     # Data client to server. Server renegotiating. Won't work
-    #test2 "Renegotiate1<" "--rfactor 10" "--debug $DEBUG"
+    test2 "Renegotiate1<" "--rfactor 10" "--debug $DEBUG"
     # Data server to client. Client renegotiating. Won't work
-    #test1 "Renegotiate2>" "" "--debug $DEBUG --rfactor 10"
+    test1 "Renegotiate2>" "" "--debug $DEBUG --rfactor 10"
 
     # Data client to server. Client renegotiating. Should work
     test2 "Renegotiate2<" "" "--debug $DEBUG --rfactor 10"
@@ -149,5 +161,6 @@ testa2
 testb
 testc
 teste
+testpsk
 testsrp1
 testsrp2

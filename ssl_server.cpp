@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <sys/socket.h>
 #include <openssl/ssl.h>
+#include <openssl/dh.h>
 #include <openssl/srp.h>
 #include <openssl/rand.h>
 #include <openssl/err.h>
@@ -53,8 +54,14 @@ void setupDH(SSL_CTX *ctx)
   DH *dh;
   FILE *fp = fopen(dhparamfile,"r");
   if (fp == NULL) {
-    if (debuglevel > 1) fprintf(stderr,"Generating DH params\n");
-    dh = DH_generate_parameters(256,5,NULL,NULL);
+    // 1024 bits is minimum acceptable it seems.
+    int prime_len = 1024;
+    int generator = 5;
+    if (debuglevel > 1) fprintf(stderr,"DH_generate_parameters(%d,%d)...\n",
+                                prime_len, generator);
+    dh = DH_new();
+    DH_generate_parameters_ex(dh,prime_len,generator,NULL);
+    if (debuglevel > 1) fprintf(stderr,"Done\n");
   } else {
     if (debuglevel > 1) fprintf(stderr,"Reading DH params from %s\n", dhparamfile);
     dh = PEM_read_DHparams(fp,NULL,NULL,NULL);
