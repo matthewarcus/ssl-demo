@@ -6,11 +6,12 @@ ssl_client and ssl_server are simple single threaded client and server applicati
 
 To run, eg:
 
-$ make
+```$ make
 
 $ ./ssl_server 9999 &
 $ echo "Hello world" | ./ssl_client localhost:9999
 $ kill %1
+```
 
 See code for further options.
 
@@ -22,6 +23,7 @@ compile against your local openssl dev installation, you can set OPENSSL or LIBR
 in the makefile to point at a local (open|libre)ssl source tree & the build will
 get headers and libraries directly from there.
 
-$ make test
+```$ make test
+```
 
 runs a simple test script.
