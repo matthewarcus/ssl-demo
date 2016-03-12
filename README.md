@@ -18,8 +18,8 @@ makecerts script (used by makefile) makes the necessary certificates; script may
 to, for example, generate different types of certificate.
 
 Modify the makefile for your desired version of openssl, by default it will
-compile against your local openssl dev installation, you can set OPEN_SSL or LIBRE_SSL
-in the makefile to point at a local openssl source tree & the build will
+compile against your local openssl dev installation, you can set OPENSSL or LIBRESSL
+in the makefile to point at a local (open|libre)ssl source tree & the build will
 get headers and libraries directly from there.
 
 $ make test
