@@ -15,7 +15,7 @@ EXES := ssl_client ssl_server
 # eg:
 #LIBRESSL := libressl/current
 #OPENSSL := openssl/current
-OPENSSL := openssl/devel
+#OPENSSL := openssl/devel
 
 # Be careful that you really are getting the right headers & not eg. including
 # LibreSSL headers but linking with OpenSSL libraries or vice versa, though
@@ -28,12 +28,15 @@ OPENSSL_LIBS := $(LIBRESSL)/ssl/.libs/libssl.a $(LIBRESSL)/crypto/.libs/libcrypt
 else
 ifdef OPENSSL
 INC += -I$(OPENSSL)/include
-LIB += -L$(OPENSSL) 
+LIB += -L$(OPENSSL)
 endif
-OPENSSL_LIBS := -lssl -lcrypto
+OPENSSL_LIBS := -lssl -lcrypto -lpthread
 endif
 
-all: $(EXES)
+# Use our main ca cert to represent all certs made by makecerts
+CERTS := ca.pem
+
+all: $(EXES) $(CERTS)
 
 $(EXES): %: %.o
 	$(CXX) -Wall -g $(LIB) -o $@ $^ $(OPENSSL_LIBS) -ldl
@@ -43,8 +46,11 @@ ssl_client ssl_server: ssl_lib.o
 ssl_client.o ssl_server.o ssl_lib.o: %.o: %.cpp ssl_lib.h
 	$(CXX) -Wall -g -O2 $(INC) $(EXTRA) -c -Wshadow -o $@ $<
 
-test: ssl_server ssl_client test.sh
+test: test.sh $(EXES) $(CERTS)
 	./test.sh
+
+$(CERTS): makecerts
+	./makecerts
 
 clean:
 	rm -f $(EXES) *.o
@@ -54,3 +60,4 @@ cleanall: clean
 	rm -f *.pem */*.pem *.srl
 
 .PHONY: clean test all
+

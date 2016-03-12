@@ -405,7 +405,7 @@ int main(int argc, char *argv[])
     }
   }
   if ( argc != 2 ) {
-    fprintf(stderr, "Usage: %s [-a] <portnum>\n", argv[0]);
+    fprintf(stderr, "Usage: %s [options] <portnum>\n", argv[0]);
     exit(0);
   }
 
@@ -497,7 +497,13 @@ int main(int argc, char *argv[])
     }
     do { 
       // Second accept is like accept.
-      if (BIO_do_accept(server) <= 0) break;
+      if (BIO_do_accept(server) <= 0) {
+        if (errno != EINTR) {
+          fprintf(stderr,"accept failed\n");
+          ERR_print_errors_fp(stderr);
+        }
+        break;
+      }
       BIO *bio = BIO_pop(server);
       CHECK(bio != NULL);
       doConnection(ctx, bio, verify_client, waitforpeer);

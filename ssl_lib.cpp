@@ -186,7 +186,7 @@ void describeSession(SSL *ssl)
   {
     unsigned char *ticket;
     size_t ticklen;
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+#if !defined LIBRESSL_VERSION_NUMBER && OPENSSL_VERSION_NUMBER >= 0x10100000L
     SSL_SESSION_get0_ticket(session, &ticket, &ticklen);
 #else
     ticket = session->tlsext_tick;
@@ -325,7 +325,10 @@ int sslConnect(SSL *ssl)
       return ret;
     } else {
       ret = sslWait(ssl,ret,"Connect");
-      if (ret < 0) return ret;
+      // It would seem that connect can return EAGAIN...
+      if ((SSL_get_error(ssl,ret) != SSL_ERROR_SYSCALL || errno != EAGAIN) && ret < 0) {
+        return ret;
+      }
     }
   }
 }
@@ -545,6 +548,9 @@ bool sslLoop(SSL *ssl, int fd, bool isserver, bool verify, bool waitforpeer)
 	  } else if (err == SSL_ERROR_WANT_WRITE) {
 	    read_wantwrite_count++;
 	    read_wantwrite = true;
+	  } else if (err == SSL_ERROR_SYSCALL && errno == EAGAIN) {
+            // Don't do anything here, go round again.
+            // This seems to be a new "feature".
 	  } else {
 	    fprintf(stderr, "SSL_read: err %d\n", err);
 	    CHECK(0);

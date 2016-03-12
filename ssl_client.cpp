@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
     }
   }
   if ( argc != 2) {
-    fprintf(stderr,"usage: %s <hostname>:<portnum>\n", progname);
+    fprintf(stderr,"usage: %s [options] <hostname>:<portnum>\n", progname);
     exit(0);
   }
 
