@@ -149,7 +149,12 @@ int srpServerCallback(SSL *s, int *ad, void *arg)
   CHECK(srpusername != NULL);
   if (debuglevel > 2) fprintf(stderr, " username = %s\n", srpusername);
   // Get data for user
+  // FIXME: should free this if we used get1_by_user
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  SRP_user_pwd *p = SRP_VBASE_get1_by_user(srpData,srpusername);
+#else  
   SRP_user_pwd *p = SRP_VBASE_get_by_user(srpData,srpusername);
+#endif
   if (p == NULL) {
     if (debuglevel > 0) {
       fprintf(stderr, "User %s doesn't exist\n", srpusername);
@@ -167,6 +172,9 @@ int srpServerCallback(SSL *s, int *ad, void *arg)
 
   // Set verifier data
   CHECK(SSL_set_srp_server_param(s, p->N, p->g, p->s, p->v, NULL) == SSL_OK);
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+  SRP_user_pwd_free(p);
+#endif
   return SSL_ERROR_NONE;
 }
 
@@ -343,6 +351,8 @@ int main(int argc, char *argv[])
       argc--; argv++;
       debuglevel = atoi(argv[1]);
       argc--; argv++;
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+      // Removed or deprecated methods
     } else if (strcmp(argv[1],"--SSLv3") == 0) {
       method = SSLv3_server_method();
       argc--; argv++;
@@ -355,6 +365,7 @@ int main(int argc, char *argv[])
     } else if (strcmp(argv[1],"--TLSv1.2") == 0) {
       method = TLSv1_2_server_method();
       argc--; argv++;
+#endif      
     } else if (strcmp(argv[1],"--cipherlist") == 0) {
       argc--; argv++;
       cipherlist = argv[1];

@@ -72,7 +72,7 @@ testpsk() {
     check "PSK ciphersuite 1" "$RUNLOG" "PSK-"
     test2 "PSK1<" "--psk" "--psk --user user --password password"
     test1 "PSK2>" "--psk --nocert" "--psk --user user --password password"
-    check "PSK ciphersuite 2" "$RUNLOG" "PSK-AES"
+    check "PSK ciphersuite 2" "$RUNLOG" "PSK-"
     test2 "PSK2<" "--psk --nocert" "--psk --user user --password password"
     test1 "PSK3>" "--psk" "--psk --user user --password password --cipherlist PSK-AES256-CBC-SHA"
     test2 "PSK3<" "--psk" "--psk --user user --password password --cipherlist PSK-AES256-CBC-SHA"

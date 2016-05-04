@@ -174,15 +174,15 @@ void describeSession(SSL *ssl)
     fprintf(stderr, "Session ID: %s\n", s);
     OPENSSL_free(s);
   }
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
   {
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+    // Don't seem to have this available to read any more
     char *s = hex_to_string(session->sid_ctx,
                             session->sid_ctx_length);
-
     fprintf(stderr, "Session ID CTX: %s\n", s);
     OPENSSL_free(s);
-  }
 #endif
+  }
   {
     unsigned char *ticket;
     size_t ticklen;
@@ -268,7 +268,11 @@ void sslCleanup()
   //ENGINE_cleanup();
   CRYPTO_cleanup_all_ex_data();
   ERR_free_strings();
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
   ERR_remove_thread_state(NULL);
+#else
+  ERR_remove_thread_state();
+#endif
   EVP_cleanup();
 }
 
