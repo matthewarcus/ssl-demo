@@ -1,6 +1,6 @@
 ## SSL Demo
 
-Investigating openssl. I wrote this a couple of years ago to help me understand openssl better, so the main aim is exercising features rather any particular use.
+Investigating openssl. I wrote this a few years ago to help me understand openssl better, so the main aim is exercising features rather any particular use.
 
 ssl_client and ssl_server are simple single threaded client and server applications.
 
@@ -29,3 +29,7 @@ $ make test
 ```
 
 runs a simple test script.
+
+Now updated for Openssl 1.1.1 and TLSv1.3 - some functionality is no longer available
+in 1.3 (eg. PSK, SRP, renegotiation) , so for testing we revert to 1.2 in the client
+(this results in "DEPRECATED" warnings when compiling).

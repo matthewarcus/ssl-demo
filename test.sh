@@ -140,21 +140,21 @@ testsrp2() {
 teste() {
     DEBUG=0
     # Data server to client. Server renegotiating. Should work
-    test1 "Renegotiate1>" "--rfactor 10" "--debug $DEBUG"
+    test1 "Renegotiate1>" "--rfactor 10" "--debug $DEBUG --TLSv1.2"
     cat $RUNLOG
     # Data client to server. Server renegotiating. Won't work
-    test2 "Renegotiate1<" "--rfactor 10" "--debug $DEBUG"
+    test2 "Renegotiate1<" "--rfactor 10" "--debug $DEBUG --TLSv1.2"
     # Data server to client. Client renegotiating. Won't work
-    test1 "Renegotiate2>" "" "--debug $DEBUG --rfactor 10"
+    test1 "Renegotiate2>" "" "--debug $DEBUG --rfactor 10 --TLSv1.2"
 
     # Data client to server. Client renegotiating. Should work
     test2 "Renegotiate2<" "" "--debug $DEBUG --rfactor 10 --TLSv1.2"
     cat $RUNLOG
 
     # Data server to client. Client renegotiating, won't work
-    #test1 "Renegotiate3>" "--rfactor 10" "--debug $DEBUG --rfactor 10"
+    test1 "Renegotiate3>" "--rfactor 10" "--debug $DEBUG --rfactor 10 --TLSv1.2"
     # Data client to server. Server renegotiating. Won't work
-    #test2 "Renegotiate3<" "--rfactor 10" "--debug $DEBUG --rfactor 10"
+    test2 "Renegotiate3<" "--rfactor 10" "--debug $DEBUG --rfactor 10 --TLSv1.2"
 }
 
 # Start with a clean slate

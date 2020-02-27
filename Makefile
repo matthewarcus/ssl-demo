@@ -8,6 +8,7 @@
 CXX := g++
 EXES := ssl_client ssl_server
 
+# Extra runtime checks
 SANITIZE := -fsanitize=undefined
 
 # Define LIBRESSL to be the root of the desired LibreSSL source tree
