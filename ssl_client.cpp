@@ -127,6 +127,7 @@ int main(int argc, char *argv[])
     } else if (strcmp(argv[1],"--SSLv3") == 0) {
       method = SSLv3_client_method();
       argc--; argv++;
+#endif      
     } else if (strcmp(argv[1],"--TLSv1") == 0) {
       method = TLSv1_client_method();
       argc--; argv++;
@@ -136,7 +137,6 @@ int main(int argc, char *argv[])
     } else if (strcmp(argv[1],"--TLSv1.2") == 0) {
       method = TLSv1_2_client_method();
       argc--; argv++;
-#endif      
     } else if (strcmp(argv[1],"--cipherlist") == 0) {
       argc--; argv++;
       cipherlist = argv[1];

@@ -333,6 +333,8 @@ int main(int argc, char *argv[])
   bool doSRP = false;   // Secure remote password
 #endif
   bool once = false;    // Serve just one connection, eg. for valgrind test
+
+  const char *progname = argv[0];
   // For actual security, 'ECDH:RSA:ALL !DH !RC4 !DES !SRP !PSK !aNULL !eNULL' passes
   // the SSL Labs test.
   // Allow ADH/AECDH/SRP as well as NULL for testing
@@ -416,7 +418,7 @@ int main(int argc, char *argv[])
     }
   }
   if ( argc != 2 ) {
-    fprintf(stderr, "Usage: %s [options] <portnum>\n", argv[0]);
+    fprintf(stderr, "Usage: %s [options] <portnum>\n", progname);
     exit(0);
   }
 

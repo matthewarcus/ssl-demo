@@ -8,6 +8,8 @@
 CXX := g++
 EXES := ssl_client ssl_server
 
+SANITIZE := -fsanitize=undefined
+
 # Define LIBRESSL to be the root of the desired LibreSSL source tree
 # else define OPENSSL to be the root of the desired OpenSSL source tree.
 # If neither defined, installed version of OpenSSL will be used.
@@ -39,12 +41,12 @@ CERTS := ca.pem
 all: $(EXES) $(CERTS)
 
 $(EXES): %: %.o
-	$(CXX) -Wall -g $(LIB) -o $@ $^ $(OPENSSL_LIBS) -ldl
+	$(CXX) -Wall -g $(LIB) $(SANITIZE) -o $@ $^ $(OPENSSL_LIBS) -ldl
 
 ssl_client ssl_server: ssl_lib.o
 
 ssl_client.o ssl_server.o ssl_lib.o: %.o: %.cpp ssl_lib.h
-	$(CXX) -Wall -g -O2 $(INC) $(EXTRA) -c -Wshadow -o $@ $<
+	$(CXX) -Wall -g -O2 $(INC) $(SANITIZE) $(EXTRA) -c -Wshadow -o $@ $<
 
 test: test.sh $(EXES) $(CERTS)
 	./test.sh

@@ -184,7 +184,7 @@ void describeSession(SSL *ssl)
 #endif
   }
   {
-    unsigned char *ticket;
+    const unsigned char *ticket;
     size_t ticklen;
 #if !defined LIBRESSL_VERSION_NUMBER && OPENSSL_VERSION_NUMBER >= 0x10100000L
     SSL_SESSION_get0_ticket(session, &ticket, &ticklen);
@@ -270,8 +270,6 @@ void sslCleanup()
   ERR_free_strings();
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
   ERR_remove_thread_state(NULL);
-#else
-  ERR_remove_thread_state();
 #endif
   EVP_cleanup();
 }

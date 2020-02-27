@@ -68,36 +68,39 @@ testa() {
 }
 
 testpsk() {
-    test1 "PSK1>" "--psk" "--psk --user user --password password"
+    test1 "PSK1>" "--psk" "--psk --user user --password password --TLSv1.2"
     check "PSK ciphersuite 1" "$RUNLOG" "PSK-"
     test2 "PSK1<" "--psk" "--psk --user user --password password"
-    test1 "PSK2>" "--psk --nocert" "--psk --user user --password password"
+    test1 "PSK2>" "--psk --nocert" "--psk --user user --password password --TLSv1.2"
     check "PSK ciphersuite 2" "$RUNLOG" "PSK-"
     test2 "PSK2<" "--psk --nocert" "--psk --user user --password password"
     test1 "PSK3>" "--psk" "--psk --user user --password password --cipherlist PSK-AES256-CBC-SHA"
-    test2 "PSK3<" "--psk" "--psk --user user --password password --cipherlist PSK-AES256-CBC-SHA"
+    test2 "PSK3<" "--psk" "--psk --user user --password password --cipherlist PSK-AES256-CBC-SHA --TLSv1.2"
     check "PSK ciphersuite 3" "$RUNLOG" "PSK-AES"
 }
 
 testsrp1() {
-    test1 "SRP1>" "--srp" "--srp --user user --password password"
+    test1 "SRP1>" "--srp" "--srp --user user --password password --TLSv1.2"
     check "SRP ciphersuite 1" "$RUNLOG" "SRP-"
     test2 "SRP1<" "--srp" "--srp --user user --password password"
     test1 "SRP2>" "--srp --nocert" "--srp --user user --password password"
     check "SRP ciphersuite 2" "$RUNLOG" "SRP-AES"
     test2 "SRP2<" "--srp --nocert" "--srp --user user --password password"
-    test1 "SRP3>" "--srp" "--srp --user user --password password --cipherlist SRP-AES-256-CBC-SHA"
-    test2 "SRP3<" "--srp" "--srp --user user --password password --cipherlist SRP-AES-256-CBC-SHA"
+    check "SRP ciphersuite 3" "$RUNLOG" "SRP-AES"
+    test1 "SRP3>" "--srp" "--srp --user user --password password --cipherlist SRP-AES-256-CBC-SHA --TLSv1.2"
+    check "SRP ciphersuite 4" "$RUNLOG" "SRP-AES"
+    test2 "SRP3<" "--srp" "--srp --user user --password password --cipherlist SRP-AES-256-CBC-SHA --TLSv1.2"
+    check "SRP ciphersuite 5" "$RUNLOG" "SRP-AES"
 }
 
 testa2() {
-    test1 "ecdh>" "--ecdh" ""
+    test1 "ecdh>" "--ecdh" "--TLSv1.2"
     check "ECDH ciphersuite 1" "$RUNLOG" "ECDHE-"
-    test2 "ecdh<" "--ecdh" ""
+    test2 "ecdh<" "--ecdh" "--TLSv1.2"
     check "ECDH ciphersuite 2" "$RUNLOG" "ECDHE-"
-    test1 "clientverify>" "--ecdh --verifyclient" ""
+    test1 "clientverify>" "--ecdh --verifyclient" "--TLSv1.2"
     # This should wait until the renegotiation has happened before sending more data
-    test2 "clientverify<" "--verifyclient" ""
+    test2 "clientverify<" "--verifyclient" "--TLSv1.2"
 }
 
 # For sensible tests, need to be able to log specific data in a
@@ -105,9 +108,9 @@ testa2() {
 testb() {
     NAME="Ticket"
     $SERVER --daemonize --wait $PORT > /dev/null
-    cat $DATAFILE | $CLIENT --debug 1 --writesession foo.tick localhost:$PORT 2> $RUNLOG
+    cat $DATAFILE | $CLIENT --debug 1 --writesession foo.tick --TLSv1.2 localhost:$PORT 2> $RUNLOG
     #openssl sess_id -text < foo.tick
-    cat $DATAFILE | $CLIENT --debug 1 --readsession foo.tick localhost:$PORT 2>> $RUNLOG
+    cat $DATAFILE | $CLIENT --debug 1 --readsession foo.tick --TLSv1.2 localhost:$PORT 2>> $RUNLOG
     [ $SHOWLOG ] && cat $RUNLOG
     ([ $(grep "Session ID:" $RUNLOG | uniq | wc -l) -eq 1 ] && echo "PASS: $NAME") || echo "FAIL: $NAME"
     killserver
@@ -116,9 +119,9 @@ testb() {
 testc() {
     NAME="Session"
     $SERVER --daemonize --noticket --wait $PORT > /dev/null
-    cat $DATAFILE | $CLIENT --debug 1 --writesession foo.sess localhost:$PORT 2> $RUNLOG
+    cat $DATAFILE | $CLIENT --debug 1 --writesession foo.sess --TLSv1.2 localhost:$PORT 2> $RUNLOG
     #openssl sess_id -text < foo.sess
-    cat $DATAFILE | $CLIENT --debug 1 --readsession foo.sess localhost:$PORT 2>> $RUNLOG
+    cat $DATAFILE | $CLIENT --debug 1 --readsession foo.sess --TLSv1.2 localhost:$PORT 2>> $RUNLOG
     [ $SHOWLOG ] && cat $RUNLOG
     ([ $(grep "Session ID:" $RUNLOG | uniq | wc -l) -eq 1 ] && echo "PASS: $NAME") || echo "FAIL: $NAME"
     killserver
@@ -128,7 +131,7 @@ testc() {
 testsrp2() {
     NAME="SRP invalid user"
     $SERVER --daemonize --srp --wait $PORT > /dev/null
-    $CLIENT --debug 3 --srp --user invalid --password invalid localhost:$PORT 2> $RUNLOG
+    $CLIENT --debug 3 --srp --user invalid --password invalid --TLSv1.2 localhost:$PORT 2> $RUNLOG
     [ $SHOWLOG ] && cat $RUNLOG
     check "SRP invalid user" "$RUNLOG" "^SSL3 alert .* unknown PSK identity"
     killserver
@@ -145,7 +148,7 @@ teste() {
     test1 "Renegotiate2>" "" "--debug $DEBUG --rfactor 10"
 
     # Data client to server. Client renegotiating. Should work
-    test2 "Renegotiate2<" "" "--debug $DEBUG --rfactor 10"
+    test2 "Renegotiate2<" "" "--debug $DEBUG --rfactor 10 --TLSv1.2"
     cat $RUNLOG
 
     # Data server to client. Client renegotiating, won't work
